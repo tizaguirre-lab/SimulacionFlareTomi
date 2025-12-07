@@ -2,8 +2,8 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flare Sim Final - Physics Corrected</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Flare Sim Final - Mobile Ready</title>
     <style>
         body {
             margin: 0;
@@ -12,6 +12,7 @@
             font-family: 'Segoe UI', monospace;
             overflow: hidden;
             user-select: none; 
+            touch-action: none; /* Evita scroll del navegador al arrastrar cosas */
         }
 
         /* --- Panel de Controles --- */
@@ -28,6 +29,7 @@
             width: 280px;
             max-height: 90vh;
             overflow-y: auto;
+            transition: all 0.3s ease; /* Suaviza el cambio de tamaño */
         }
 
         /* --- Panel de Datos (Arrastrable) --- */
@@ -46,6 +48,39 @@
             cursor: move; 
             box-shadow: 0 10px 20px rgba(0,0,0,0.5);
             backdrop-filter: blur(5px);
+        }
+
+        /* --- ESTILOS RESPONSIVE (CELULAR) --- */
+        @media (max-width: 768px) {
+            /* Mover controles abajo en celular */
+            #controls {
+                top: auto;
+                bottom: 0;
+                left: 0;
+                width: 100%; /* Ancho completo */
+                max-width: none;
+                border-left: none;
+                border-top: 4px solid #00d2ff;
+                border-radius: 20px 20px 0 0;
+                max-height: 30vh; /* Ocupa máximo 30% de la altura */
+                box-sizing: border-box;
+                padding: 15px;
+            }
+
+            /* Ajustar panel de datos para que no moleste tanto */
+            #dataPanel {
+                width: auto;
+                left: 10px !important; /* Forzar posición inicial */
+                right: 10px !important;
+                top: 10px !important;
+                padding: 10px;
+                font-size: 0.9em;
+            }
+
+            /* Hacer sliders más fáciles de tocar */
+            input[type="range"] {
+                height: 15px;
+            }
         }
 
         .panel-header {
@@ -103,6 +138,7 @@
 
     <div id="dataPanel">
         <div class="panel-header">
+            <span class="drag-hint">::: ARRASTRAR :::</span>
             <h4>Monitor SEP</h4>
         </div>
 
@@ -129,36 +165,58 @@
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
 
-        // --- Lógica de Arrastre ---
+        // --- Lógica de Arrastre (Mouse Y TÁCTIL) ---
         const draggable = document.getElementById('dataPanel');
         let isDragging = false;
         let startX, startY, initialLeft, initialTop;
 
-        draggable.addEventListener('mousedown', (e) => {
+        // Función unificada para empezar arrastre
+        function startDrag(clientX, clientY) {
             isDragging = true;
-            startX = e.clientX;
-            startY = e.clientY;
+            startX = clientX;
+            startY = clientY;
             const rect = draggable.getBoundingClientRect();
             initialLeft = rect.left;
             initialTop = rect.top;
             draggable.style.cursor = 'grabbing';
             draggable.style.opacity = '0.7';
-        });
+        }
 
-        window.addEventListener('mousemove', (e) => {
+        // Función unificada para mover
+        function moveDrag(clientX, clientY) {
             if (!isDragging) return;
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
+            const dx = clientX - startX;
+            const dy = clientY - startY;
             draggable.style.right = 'auto'; 
             draggable.style.left = `${initialLeft + dx}px`;
             draggable.style.top = `${initialTop + dy}px`;
-        });
+        }
 
-        window.addEventListener('mouseup', () => {
+        // Función unificada para terminar
+        function endDrag() {
             isDragging = false;
             draggable.style.cursor = 'move';
             draggable.style.opacity = '0.9';
-        });
+        }
+
+        // --- Eventos MOUSE (PC) ---
+        draggable.addEventListener('mousedown', (e) => startDrag(e.clientX, e.clientY));
+        window.addEventListener('mousemove', (e) => moveDrag(e.clientX, e.clientY));
+        window.addEventListener('mouseup', endDrag);
+
+        // --- Eventos TOUCH (CELULAR) ---
+        draggable.addEventListener('touchstart', (e) => {
+            // e.touches[0] es el primer dedo que toca la pantalla
+            startDrag(e.touches[0].clientX, e.touches[0].clientY);
+            e.preventDefault(); // Evita que la pantalla se mueva al arrastrar el panel
+        }, {passive: false});
+
+        window.addEventListener('touchmove', (e) => {
+            moveDrag(e.touches[0].clientX, e.touches[0].clientY);
+        }, {passive: false});
+
+        window.addEventListener('touchend', endDrag);
+
 
         // --- Variables Físicas ---
         let particles = [];
@@ -386,7 +444,7 @@
             ctx.beginPath();
             ctx.moveTo(0, -size/2 + 5); 
             ctx.lineTo(10, 5);          
-            ctx.lineTo(5, 5);          
+            ctx.lineTo(5, 5);           
             ctx.lineTo(5, size/3);      
             ctx.lineTo(-5, size/3);     
             ctx.lineTo(-5, 5);          
