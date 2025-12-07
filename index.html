@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flare Sim Final - Physics Corrected</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #0b0b0b;
+            color: white;
+            font-family: 'Segoe UI', monospace;
+            overflow: hidden;
+            user-select: none; 
+        }
+
+        /* --- Panel de Controles --- */
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(15, 20, 25, 0.95);
+            padding: 20px;
+            border-left: 4px solid #00d2ff;
+            border-radius: 0 10px 10px 0;
+            box-shadow: 10px 0 30px rgba(0, 0, 0, 0.8);
+            z-index: 20; 
+            width: 280px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        /* --- Panel de Datos (Arrastrable) --- */
+        #dataPanel {
+            position: absolute;
+            top: 20px;
+            right: 20px; 
+            background: rgba(30, 5, 5, 0.9);
+            padding: 20px;
+            border: 1px solid #552222;
+            border-right: 4px solid #ff4444;
+            border-radius: 8px;
+            z-index: 30; 
+            width: 250px;
+            text-align: right;
+            cursor: move; 
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+            backdrop-filter: blur(5px);
+        }
+
+        .panel-header {
+            border-bottom: 1px solid #552222;
+            padding-bottom: 5px;
+            margin-bottom: 10px;
+            cursor: move;
+        }
+
+        h3 { margin-top: 0; color: #00d2ff; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #333; padding-bottom: 10px;}
+        h4 { margin: 0; color: #ff4444; font-size: 1rem; text-transform: uppercase; display: inline-block;}
+        .drag-hint { font-size: 0.6rem; color: #884444; float: left; margin-top: 4px;}
+
+        .control-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-size: 0.85rem; color: #ccc; font-weight: 600;}
+        input[type="range"] { width: 100%; cursor: pointer; accent-color: #00d2ff; }
+        .value-display { float: right; color: #00d2ff; font-weight: bold; }
+
+        .metric-big { font-size: 2.2rem; font-weight: bold; color: #fff; margin: 5px 0; letter-spacing: -1px;}
+        .metric-unit { font-size: 1rem; color: #666; font-weight: normal;}
+        .metric-sub { font-size: 0.9rem; color: #ffaaaa; margin-bottom: 10px; font-weight: bold;}
+        .metric-desc { font-size: 0.75rem; color: #aaa; text-transform: uppercase;}
+
+        .legend-item { display: flex; align-items: center; justify-content: flex-end; margin-top: 4px; font-size: 0.75rem; color: #999;}
+        .dot { width: 8px; height: 8px; border-radius: 50%; margin-left: 8px;}
+
+        canvas { display: block; position: absolute; top: 0; left: 0; z-index: 1;}
+    </style>
+</head>
+<body>
+
+    <div id="controls">
+        <h3>Configuración Flare</h3>
+        
+        <div class="control-group">
+            <label>Altura de Antorcha (m) <span class="value-display" id="heightVal">60</span></label>
+            <input type="range" id="stackHeight" min="10" max="150" value="60" step="1">
+        </div>
+
+        <div class="control-group">
+            <label>Velocidad Viento (m/s) <span class="value-display" id="windSpeedVal">5.0</span></label>
+            <input type="range" id="windSpeed" min="0" max="30" value="5" step="0.5">
+        </div>
+
+        <div class="control-group">
+            <label>Dirección Viento <span class="value-display" id="windDirVal">0° (N)</span></label>
+            <input type="range" id="windAngle" min="0" max="360" value="0" step="1">
+        </div>
+
+        <div class="control-group">
+            <label>Caudal de Gas (t/h) <span class="value-display" id="flowVal">40</span></label>
+            <input type="range" id="gasFlow" min="10" max="100" value="40">
+        </div>
+    </div>
+
+    <div id="dataPanel">
+        <div class="panel-header">
+            <h4>Monitor SEP</h4>
+        </div>
+
+        <div class="metric-desc">Radiación Máx en Suelo</div>
+        <div class="metric-big"><span id="radValue">0.0</span> <span class="metric-unit">kW/m²</span></div>
+        
+        <div class="metric-desc">Ubicación del Máximo</div>
+        <div class="metric-sub" id="radLoc">0m N, 0m E</div>
+        
+        <div style="border-top: 1px solid #442222; margin: 10px 0;"></div>
+        
+        <div class="metric-desc">Zonas de Riesgo</div>
+        <div class="legend-item">Crítico (>5 kW) <span class="dot" style="background: #ff3333; box-shadow: 0 0 5px #ff3333;"></span></div>
+        <div class="legend-item">Alto (>3 kW) <span class="dot" style="background: orange;"></span></div>
+        <div class="legend-item">Alerta (1.5 kW) <span class="dot" style="background: #00ff00;"></span></div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // --- Lógica de Arrastre ---
+        const draggable = document.getElementById('dataPanel');
+        let isDragging = false;
+        let startX, startY, initialLeft, initialTop;
+
+        draggable.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            const rect = draggable.getBoundingClientRect();
+            initialLeft = rect.left;
+            initialTop = rect.top;
+            draggable.style.cursor = 'grabbing';
+            draggable.style.opacity = '0.7';
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            draggable.style.right = 'auto'; 
+            draggable.style.left = `${initialLeft + dx}px`;
+            draggable.style.top = `${initialTop + dy}px`;
+        });
+
+        window.addEventListener('mouseup', () => {
+            isDragging = false;
+            draggable.style.cursor = 'move';
+            draggable.style.opacity = '0.9';
+        });
+
+        // --- Variables Físicas ---
+        let particles = [];
+        let windSpeed = 5;
+        let windAngleDeg = 0; 
+        let gasFlow = 40;
+        let stackHeightMeters = 60; 
+
+        // Variables Globales de Cálculo
+        let flameCenter = { x: 0, y: 0, z: 0 };
+        let maxGroundRadiation = 0;
+        let qRadiantGlobal = 0; // Para compartir con el radar
+
+        // --- Variables Visuales ---
+        const groundY = canvas.height - 50; 
+        let torchY = 0; 
+        const centerX = canvas.width / 2;
+        const pixelsPerMeter = 4; // Escala de visualización y cálculo
+
+        // --- UI Listeners ---
+        const uiHeight = document.getElementById('stackHeight');
+        const uiWindSpeed = document.getElementById('windSpeed');
+        const uiWindAngle = document.getElementById('windAngle');
+        const uiGasFlow = document.getElementById('gasFlow');
+        
+        uiHeight.addEventListener('input', (e) => {
+            stackHeightMeters = parseInt(e.target.value);
+            document.getElementById('heightVal').innerText = stackHeightMeters;
+            particles = []; 
+        });
+
+        uiWindSpeed.addEventListener('input', (e) => {
+            windSpeed = parseFloat(e.target.value);
+            document.getElementById('windSpeedVal').innerText = windSpeed.toFixed(1);
+        });
+
+        uiWindAngle.addEventListener('input', (e) => {
+            windAngleDeg = parseInt(e.target.value);
+            const dirs = ["N", "NE", "E", "SE", "S", "SO", "O", "NO"];
+            const index = Math.round(windAngleDeg / 45) % 8;
+            document.getElementById('windDirVal').innerText = windAngleDeg + "° (" + dirs[index] + ")";
+        });
+
+        uiGasFlow.addEventListener('input', (e) => {
+            gasFlow = parseInt(e.target.value);
+            document.getElementById('flowVal').innerText = gasFlow;
+        });
+
+        class Particle {
+            constructor() {
+                this.x = (Math.random() - 0.5) * 5; 
+                this.y = 0; 
+                this.z = (Math.random() - 0.5) * 5;
+
+                const velocityY = (Math.random() * 3 + 2) + (gasFlow / 12);
+                this.vx = (Math.random() - 0.5) * 1.5; 
+                this.vy = -velocityY; 
+                this.vz = (Math.random() - 0.5) * 1.5; 
+
+                this.baseSize = Math.random() * 20 + 10 + (gasFlow/4);
+                this.life = 100;
+                this.r = 255;
+                this.g = Math.floor(Math.random() * 150 + 100);
+            }
+
+            update() {
+                const rad = (windAngleDeg - 90) * (Math.PI / 180);
+                const windFactor = (100 - this.life) * 0.003; 
+                const windX = Math.cos(rad) * windSpeed * windFactor;
+                const windZ = Math.sin(rad) * windSpeed * windFactor;
+
+                this.vx += windX;
+                this.vz += windZ;
+                this.vy *= 0.98; 
+                if(this.vy > -1.5) this.vy = -1.5; 
+
+                this.x += this.vx;
+                this.y += this.vy;
+                this.z += this.vz;
+
+                this.life -= 1.8;
+                this.baseSize *= 0.96;
+                if (this.life < 60) this.g -= 8;
+            }
+
+            draw() {
+                const perspective = 600;
+                let scale = perspective / (perspective - this.z);
+                const screenX = centerX + (this.x * scale);
+                const screenY = torchY + (this.y * scale); 
+                const screenSize = this.baseSize * scale;
+
+                if (scale > 0) {
+                    ctx.beginPath();
+                    ctx.arc(screenX, screenY, Math.max(0, screenSize), 0, Math.PI * 2);
+                    const alpha = this.life / 100;
+                    let color = `rgba(${this.r}, ${this.g}, 0, ${alpha})`;
+                    if (this.life < 25) color = `rgba(60, 60, 60, ${alpha * 0.4})`;
+                    ctx.fillStyle = color;
+                    ctx.fill();
+                }
+            }
+        }
+
+        function calculatePhysics() {
+            const visualHeight = stackHeightMeters * pixelsPerMeter;
+            torchY = groundY - visualHeight;
+
+            if (particles.length === 0) {
+                flameCenter = {x:0, y:0, z:0};
+                maxGroundRadiation = 0;
+                return;
+            }
+
+            let sumX = 0, sumY = 0, sumZ = 0, count = 0;
+            for(let p of particles) {
+                if(p.life > 40) { 
+                    sumX += p.x;
+                    sumY += p.y;
+                    sumZ += p.z;
+                    count++;
+                }
+            }
+
+            if(count > 0) {
+                flameCenter = {
+                    x: sumX / count,
+                    y: sumY / count,
+                    z: sumZ / count
+                };
+            }
+
+            const flameRise = Math.abs(flameCenter.y); 
+            const totalHeight = stackHeightMeters + (flameRise / pixelsPerMeter); 
+            
+            // Distancia al cuadrado (m^2)
+            const distSq = totalHeight * totalHeight; 
+
+            // 1. Energía Total (kW térmicos)
+            // LHV ~ 12,900 kWh/ton
+            const qThermal = gasFlow * 12900; 
+
+            // 2. Fracción Radiada (F)
+            const F = 0.30;
+            qRadiantGlobal = qThermal * F; // Guardamos en global para el radar
+
+            // 3. Intensidad máxima en suelo (Esfera completa)
+            let kw = qRadiantGlobal / (4 * Math.PI * distSq);
+            maxGroundRadiation = kw;
+
+            // Actualizar Texto Radiación
+            const displayRad = document.getElementById('radValue');
+            displayRad.innerText = maxGroundRadiation.toFixed(2);
+            
+            if(maxGroundRadiation > 5) displayRad.style.color = '#ff3333';
+            else if(maxGroundRadiation > 3) displayRad.style.color = 'orange';
+            else if(maxGroundRadiation > 1.5) displayRad.style.color = '#00ff00';
+            else displayRad.style.color = '#fff';
+
+            // Actualizar Texto Ubicación
+            const locX = (flameCenter.x / pixelsPerMeter).toFixed(1);
+            const locZ = (flameCenter.z / pixelsPerMeter).toFixed(1);
+
+            let txtX = locX >= 0 ? `${Math.abs(locX)}m E` : `${Math.abs(locX)}m O`;
+            let txtZ = locZ >= 0 ? `${Math.abs(locZ)}m S` : `${Math.abs(locZ)}m N`;
+            
+            document.getElementById('radLoc').innerText = `${txtZ}, ${txtX}`;
+        }
+
+        function drawScene() {
+            const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            grad.addColorStop(0, '#050505');
+            grad.addColorStop(0.5, '#151515');
+            grad.addColorStop(1, '#202020');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0,0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#252525';
+            ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
+            
+            // Grid de suelo
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for(let i=0; i<canvas.width; i+=100) {
+                ctx.moveTo(i, groundY); ctx.lineTo(i - (centerX-i)*2, canvas.height);
+            }
+            ctx.stroke();
+
+            // Torre
+            const w = 30; 
+            ctx.fillStyle = '#3a3a3a'; 
+            ctx.fillRect(centerX - w/2, torchY, w, groundY - torchY);
+            ctx.strokeStyle = '#555';
+            ctx.beginPath();
+            ctx.moveTo(centerX - w/2, torchY); ctx.lineTo(centerX - w/2, groundY);
+            ctx.moveTo(centerX + w/2, torchY); ctx.lineTo(centerX + w/2, groundY);
+            ctx.stroke();
+            
+            ctx.fillStyle = '#111';
+            ctx.fillRect(centerX - (w+4)/2, torchY, w+4, 15);
+        }
+
+        function drawWindVane3D() {
+            const size = 60;
+            const x = canvas.width - 80;
+            const y = 80;
+            
+            ctx.save();
+            ctx.translate(x, y);
+            
+            ctx.fillStyle = '#888';
+            ctx.font = "10px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText("VIENTO", 0, -size/2 - 10);
+
+            ctx.strokeStyle = '#444';
+            ctx.beginPath(); ctx.arc(0,0, size/2, 0, Math.PI*2); ctx.stroke();
+            ctx.fillStyle = '#666'; ctx.fillText("N", 0, -size/2 + 10);
+
+            // CORRECCIÓN: Rotación directa y dibujo hacia arriba
+            const rad = windAngleDeg * (Math.PI / 180);
+            ctx.rotate(rad);
+
+            ctx.beginPath();
+            ctx.moveTo(0, -size/2 + 5); 
+            ctx.lineTo(10, 5);          
+            ctx.lineTo(5, 5);          
+            ctx.lineTo(5, size/3);      
+            ctx.lineTo(-5, size/3);     
+            ctx.lineTo(-5, 5);          
+            ctx.lineTo(-10, 5);         
+            ctx.closePath();
+            
+            ctx.fillStyle = '#00d2ff';
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function drawRadar() {
+            const size = 260; 
+            const radius = size / 2;
+            const radarX = canvas.width - radius - 30;
+            const radarY = canvas.height - radius - 30;
+            const mapScale = 0.2; 
+            
+            ctx.save();
+            ctx.translate(radarX, radarY);
+
+            // 1. Fondo
+            ctx.beginPath();
+            ctx.arc(0, 0, radius, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(0, 10, 15, 0.9)';
+            ctx.strokeStyle = '#00d2ff';
+            ctx.lineWidth = 2;
+            ctx.fill();
+            ctx.stroke();
+
+            // 2. Grilla
+            ctx.strokeStyle = '#333';
+            ctx.fillStyle = '#555';
+            ctx.font = "9px Arial";
+            ctx.textAlign = "center";
+            
+            const distances = [50, 100, 150]; 
+            
+            distances.forEach(d => {
+                const rPx = d * pixelsPerMeter * mapScale;
+                if(rPx < radius) {
+                    ctx.beginPath();
+                    ctx.arc(0, 0, rPx, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.fillText(d + "m", 0, -rPx + 10);
+                }
+            });
+
+            // 3. Ejes
+            ctx.strokeStyle = '#444';
+            ctx.beginPath(); 
+            ctx.moveTo(0, -radius); ctx.lineTo(0, radius); 
+            ctx.moveTo(-radius, 0); ctx.lineTo(radius, 0); 
+            ctx.stroke();
+
+            ctx.fillStyle = '#00d2ff';
+            ctx.font = "bold 11px Arial";
+            ctx.fillText("N", 0, -radius + 15);
+            ctx.fillText("S", 0, radius - 5);
+            ctx.fillText("E", radius - 10, 4);
+            ctx.fillText("O", -radius + 10, 4);
+
+            // --- ZONAS DE RIESGO (CORREGIDO) ---
+            const cx = flameCenter.x * mapScale;
+            const cy = flameCenter.z * mapScale;
+            
+            // Calculamos el RADIO REAL (en pixeles de mapa) para cada nivel de radiación
+            // r = sqrt( Q / (4 * pi * Intensidad) )
+            // Esto asegura que el circulo coincida con la grilla de metros real
+            
+            function getRadiusForIntensity(kwTarget) {
+                // Radio esfera en metros
+                const rSphere = Math.sqrt(qRadiantGlobal / (4 * Math.PI * kwTarget));
+                // Convertir a pixeles mapa
+                return rSphere * pixelsPerMeter * mapScale;
+            }
+
+            const rCritical = getRadiusForIntensity(5.0);
+            const rHigh = getRadiusForIntensity(3.0);
+            const rAlert = getRadiusForIntensity(1.5);
+
+            // Dibujar SOLO si la radiación máxima supera el umbral
+            // Condicionales estrictos basados en el texto del panel
+            
+            if(maxGroundRadiation > 1.5) {
+                ctx.beginPath(); ctx.arc(cx, cy, rAlert, 0, Math.PI*2);
+                ctx.strokeStyle = '#00ff00'; ctx.lineWidth=1; ctx.stroke();
+            }
+            
+            if(maxGroundRadiation > 3.0) {
+                ctx.beginPath(); ctx.arc(cx, cy, rHigh, 0, Math.PI*2);
+                ctx.strokeStyle = 'orange'; ctx.lineWidth=1; ctx.stroke();
+            }
+            
+            // CORRECCIÓN PRINCIPAL: Solo dibujar rojo si > 5.0
+            if(maxGroundRadiation > 5.0) {
+                ctx.beginPath(); ctx.arc(cx, cy, rCritical, 0, Math.PI*2);
+                ctx.fillStyle = 'rgba(255, 50, 50, 0.3)'; ctx.fill();
+                ctx.strokeStyle = '#ff3333'; ctx.lineWidth=2; ctx.stroke();
+            }
+
+            // Cruz del centro
+            if(maxGroundRadiation > 0.1) {
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.beginPath(); 
+                ctx.moveTo(cx-5, cy-5); ctx.lineTo(cx+5, cy+5);
+                ctx.moveTo(cx+5, cy-5); ctx.lineTo(cx-5, cy+5);
+                ctx.stroke();
+            }
+
+            // Base Torre
+            ctx.fillStyle = '#00d2ff';
+            ctx.fillRect(-3, -3, 6, 6);
+
+            ctx.restore();
+        }
+
+        function animate() {
+            calculatePhysics();
+            drawScene();
+            drawWindVane3D();
+
+            ctx.globalCompositeOperation = 'lighter';
+            particles.sort((a, b) => a.z - b.z);
+            const spawnCount = Math.floor(gasFlow / 5);
+            for(let i=0; i<spawnCount; i++) particles.push(new Particle());
+
+            for (let i = 0; i < particles.length; i++) {
+                particles[i].update();
+                particles[i].draw();
+                if (particles[i].life <= 0) {
+                    particles.splice(i, 1);
+                    i--;
+                }
+            }
+            
+            ctx.globalCompositeOperation = 'source-over';
+            drawRadar();
+
+            requestAnimationFrame(animate);
+        }
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            // Recalcular groundY si es necesario
+        });
+
+        animate();
+
+    </script>
+</body>
+</html>
