@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Flare Sim - API 521 Edition</title>
+    <title>Flare Sim - V10 Final Fixed</title>
     <style>
         body {
             margin: 0;
@@ -13,6 +13,18 @@
             overflow: hidden;
             user-select: none; 
             touch-action: none;
+        }
+
+        #help-overlay {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.5);
+            font-size: 0.8rem;
+            text-align: center;
+            pointer-events: none;
+            z-index: 5;
         }
 
         /* --- Panel de Controles --- */
@@ -92,10 +104,15 @@
         .legend-item { display: flex; align-items: center; justify-content: flex-end; margin-top: 3px; font-size: 0.7rem; color: #bbb;}
         .dot { width: 8px; height: 8px; border-radius: 50%; margin-left: 8px; border: 1px solid rgba(255,255,255,0.2);}
 
-        canvas { display: block; position: absolute; top: 0; left: 0; z-index: 1;}
+        canvas { display: block; position: absolute; top: 0; left: 0; z-index: 1; cursor: grab;}
+        canvas:active { cursor: grabbing; }
     </style>
 </head>
 <body>
+
+    <div id="help-overlay">
+        🖱️ Arrastra para GIRAR | 🖱️ Rueda para ZOOM
+    </div>
 
     <div id="controls">
         <h3>Parámetros Operativos</h3>
@@ -170,13 +187,59 @@
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
 
-        // --- Lógica de Arrastre ---
+        // --- CÁMARA 3D ---
+        let cameraAngle = 0; 
+        let cameraZoom = 1.0; 
+        let isCamDragging = false;
+        let lastCamX = 0;
+
+        // Listeners para la Cámara
+        canvas.addEventListener('mousedown', (e) => {
+            isCamDragging = true;
+            lastCamX = e.clientX;
+        });
+        window.addEventListener('mousemove', (e) => {
+            if(isCamDragging) {
+                const deltaX = e.clientX - lastCamX;
+                cameraAngle += deltaX * 0.005; 
+                lastCamX = e.clientX;
+            }
+        });
+        window.addEventListener('mouseup', () => isCamDragging = false);
+
+        // Zoom
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const delta = e.deltaY * -0.001;
+            cameraZoom += delta;
+            if(cameraZoom < 0.5) cameraZoom = 0.5;
+            if(cameraZoom > 2.5) cameraZoom = 2.5;
+        });
+
+        // Touch
+        canvas.addEventListener('touchstart', (e) => {
+            if(e.touches.length === 1) {
+                lastCamX = e.touches[0].clientX;
+                isCamDragging = true;
+            }
+        });
+        canvas.addEventListener('touchmove', (e) => {
+            if(isCamDragging && e.touches.length === 1) {
+                const deltaX = e.touches[0].clientX - lastCamX;
+                cameraAngle += deltaX * 0.005;
+                lastCamX = e.touches[0].clientX;
+            }
+        });
+        canvas.addEventListener('touchend', () => isCamDragging = false);
+
+
+        // --- UI Arrastrable ---
         const draggable = document.getElementById('dataPanel');
-        let isDragging = false;
+        let isPanelDragging = false;
         let startX, startY, initialLeft, initialTop;
 
         function startDrag(clientX, clientY) {
-            isDragging = true;
+            isPanelDragging = true;
             startX = clientX;
             startY = clientY;
             const rect = draggable.getBoundingClientRect();
@@ -187,7 +250,7 @@
         }
 
         function moveDrag(clientX, clientY) {
-            if (!isDragging) return;
+            if (!isPanelDragging) return;
             const dx = clientX - startX;
             const dy = clientY - startY;
             draggable.style.right = 'auto'; 
@@ -196,40 +259,34 @@
         }
 
         function endDrag() {
-            isDragging = false;
+            isPanelDragging = false;
             draggable.style.cursor = 'move';
             draggable.style.opacity = '0.9';
         }
 
-        draggable.addEventListener('mousedown', (e) => startDrag(e.clientX, e.clientY));
+        draggable.addEventListener('mousedown', (e) => {
+            e.stopPropagation(); 
+            startDrag(e.clientX, e.clientY);
+        });
         window.addEventListener('mousemove', (e) => moveDrag(e.clientX, e.clientY));
         window.addEventListener('mouseup', endDrag);
-
         draggable.addEventListener('touchstart', (e) => {
+            e.stopPropagation();
             startDrag(e.touches[0].clientX, e.touches[0].clientY);
-            e.preventDefault(); 
         }, {passive: false});
-
-        window.addEventListener('touchmove', (e) => {
-            moveDrag(e.touches[0].clientX, e.touches[0].clientY);
-        }, {passive: false});
-        window.addEventListener('touchend', endDrag);
 
 
         // --- Variables del Sistema ---
         let particles = [];
-        // Operativos
         let windSpeed = 5;
         let windAngleDeg = 0; 
         let gasFlow = 40;
         let stackHeightMeters = 60; 
         
-        // Asunciones (Nuevas variables)
         let tipDiameter = 0.8;
         let lhvValue = 12900;
         let radFraction = 0.30;
 
-        // Globales Calculadas
         let flameCenter = { x: 0, y: 0, z: 0 };
         let maxGroundRadiation = 0;
         let qRadiantGlobal = 0; 
@@ -240,12 +297,22 @@
         const centerX = canvas.width / 2;
         const pixelsPerMeter = 4; 
 
+        // Estrellas
+        const stars = [];
+        for(let i=0; i<100; i++) {
+            stars.push({
+                x: Math.random() * window.innerWidth,
+                y: Math.random() * window.innerHeight * 0.6,
+                size: Math.random() * 2,
+                alpha: Math.random()
+            });
+        }
+
         // --- Inputs UI ---
         const uiHeight = document.getElementById('stackHeight');
         const uiWindSpeed = document.getElementById('windSpeed');
         const uiWindAngle = document.getElementById('windAngle');
         const uiGasFlow = document.getElementById('gasFlow');
-        
         const uiTipDiam = document.getElementById('tipDiam');
         const uiLhv = document.getElementById('lhvInput');
         const uiF = document.getElementById('fInput');
@@ -269,8 +336,6 @@
             gasFlow = parseInt(e.target.value);
             document.getElementById('flowVal').innerText = gasFlow;
         });
-
-        // Listeners Nuevos (Avanzados)
         uiTipDiam.addEventListener('input', (e) => {
             tipDiameter = parseFloat(e.target.value);
             document.getElementById('diamVal').innerText = tipDiameter;
@@ -284,17 +349,13 @@
             document.getElementById('fVal').innerText = radFraction.toFixed(2);
         });
 
-
+        // --- Sistema de Partículas ---
         class Particle {
             constructor() {
-                this.x = (Math.random() - 0.5) * (tipDiameter * 3); // Nace del ancho del tip
+                this.x = (Math.random() - 0.5) * (tipDiameter * 3); 
                 this.y = 0; 
                 this.z = (Math.random() - 0.5) * (tipDiameter * 3);
 
-                // --- FÍSICA CORREGIDA (DIÁMETRO) ---
-                // Velocidad de salida (Momentum Jet)
-                // v = Caudal / Area. Inversamente proporcional al cuadrado del diametro.
-                // Factor calibrado para que visualmente tenga sentido
                 const velocityFactor = gasFlow / (tipDiameter * tipDiameter); 
                 const velocityY = (Math.random() * 2 + 1) + (velocityFactor * 0.05);
 
@@ -302,7 +363,6 @@
                 this.vy = -velocityY; 
                 this.vz = (Math.random() - 0.5) * 1.5; 
 
-                // El tamaño inicial de la llama también depende del flujo
                 this.baseSize = Math.random() * 15 + 10 + (gasFlow/5);
                 this.life = 100;
                 this.r = 255;
@@ -311,20 +371,14 @@
 
             update() {
                 const rad = (windAngleDeg - 90) * (Math.PI / 180);
-                
-                // Arrastre del viento
-                // Cuanto más rápido sale el gas (Jet), menos le afecta el viento al principio
-                // Stiffness factor
                 const stiffness = 1 / (Math.abs(this.vy) + 0.1);
-                
                 const windFactor = (100 - this.life) * 0.005 * stiffness; 
+                
                 const windX = Math.cos(rad) * windSpeed * windFactor;
                 const windZ = Math.sin(rad) * windSpeed * windFactor;
 
                 this.vx += windX;
                 this.vz += windZ;
-                
-                // Flotabilidad térmica
                 this.vy *= 0.96; 
                 if(this.vy > -1.5) this.vy = -1.5; 
 
@@ -338,11 +392,27 @@
             }
 
             draw() {
-                const perspective = 600;
-                let scale = perspective / (perspective - this.z);
-                const screenX = centerX + (this.x * scale);
-                const screenY = torchY + (this.y * scale); 
-                const screenSize = this.baseSize * scale;
+                const cosA = Math.cos(cameraAngle);
+                const sinA = Math.sin(cameraAngle);
+                
+                const rotX = this.x * cosA - this.z * sinA;
+                const rotZ = this.x * sinA + this.z * cosA;
+
+                const perspective = 600 * cameraZoom;
+                let scale = perspective / (perspective - rotZ);
+                
+                const screenX = centerX + (rotX * scale);
+                
+                // --- ARREGLO DE ANCLAJE (Anchor Fix) ---
+                // Calculamos la posición visual de la punta de la antorcha afectada por el zoom
+                const visualStackHeight = (groundY - torchY) * cameraZoom;
+                const currentTipY = groundY - visualStackHeight;
+
+                // La posición Y de la partícula se basa en esa punta visual
+                // Ajustamos 'this.y' por el scale (perspectiva) y el cameraZoom (tamaño)
+                const screenY = currentTipY + (this.y * scale * cameraZoom);
+
+                const screenSize = this.baseSize * scale * cameraZoom;
 
                 if (scale > 0) {
                     ctx.beginPath();
@@ -356,7 +426,9 @@
             }
         }
 
+        // --- Física ---
         function calculatePhysics() {
+            // Cálculo base sin zoom para física
             const visualHeight = stackHeightMeters * pixelsPerMeter;
             torchY = groundY - visualHeight;
 
@@ -388,22 +460,17 @@
             const totalHeight = stackHeightMeters + (flameRise / pixelsPerMeter); 
             const distSq = totalHeight * totalHeight; 
 
-            // 1. Energía Total (Usando variable LHV dinámica)
             const qThermal = gasFlow * lhvValue; 
-
-            // 2. Fracción Radiada (Usando variable F dinámica)
             const F = radFraction;
             qRadiantGlobal = qThermal * F; 
 
-            // 3. Intensidad máxima
             let kw = qRadiantGlobal / (4 * Math.PI * distSq);
             maxGroundRadiation = kw;
 
-            // Actualizar Texto Monitor
+            // Monitor
             const displayRad = document.getElementById('radValue');
             displayRad.innerText = maxGroundRadiation.toFixed(2);
             
-            // Colores basados en los nuevos niveles API
             if(maxGroundRadiation > 9.45) displayRad.style.color = '#990000';
             else if(maxGroundRadiation > 6.3) displayRad.style.color = '#ff0000';
             else if(maxGroundRadiation > 4.75) displayRad.style.color = '#ff6600';
@@ -419,37 +486,140 @@
             document.getElementById('radLoc').innerText = `${txtZ}, ${txtX}`;
         }
 
+        // --- Gráficos (Escena 3D) ---
         function drawScene() {
-            const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            grad.addColorStop(0, '#050505');
-            grad.addColorStop(0.5, '#151515');
-            grad.addColorStop(1, '#202020');
-            ctx.fillStyle = grad;
+            // Cielo
+            const gradSky = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradSky.addColorStop(0, '#020205'); 
+            gradSky.addColorStop(0.6, '#0a1020'); 
+            gradSky.addColorStop(1, '#1a1510');   
+            ctx.fillStyle = gradSky;
             ctx.fillRect(0,0, canvas.width, canvas.height);
 
-            ctx.fillStyle = '#252525';
+            // Estrellas
+            ctx.fillStyle = 'white';
+            stars.forEach(star => {
+                ctx.globalAlpha = star.alpha;
+                ctx.beginPath(); ctx.arc(star.x, star.y, star.size, 0, Math.PI*2); ctx.fill();
+            });
+            ctx.globalAlpha = 1.0; 
+
+            // Suelo
+            const gradGround = ctx.createLinearGradient(0, groundY, 0, canvas.height);
+            gradGround.addColorStop(0, '#151005'); 
+            gradGround.addColorStop(1, '#050300'); 
+            ctx.fillStyle = gradGround;
             ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
-            
-            ctx.strokeStyle = '#333';
+
+            // GRID 3D
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
             ctx.lineWidth = 1;
             ctx.beginPath();
-            for(let i=0; i<canvas.width; i+=100) {
-                ctx.moveTo(i, groundY); ctx.lineTo(i - (centerX-i)*2, canvas.height);
+            
+            const gridSize = 2000;
+            const step = 200;
+            const cosA = Math.cos(cameraAngle);
+            const sinA = Math.sin(cameraAngle);
+
+            function project(x, z) {
+                const rotX = x * cosA - z * sinA;
+                const rotZ = x * sinA + z * cosA;
+                const perspective = 600 * cameraZoom;
+                const scale = perspective / (perspective - rotZ);
+                if (scale <= 0) return null;
+                return {
+                    x: centerX + (rotX * scale),
+                    y: groundY + (100 * scale) 
+                };
+            }
+
+            for(let x = -gridSize; x <= gridSize; x += step) {
+                let p1 = project(x, -gridSize);
+                let p2 = project(x, gridSize);
+                if(p1 && p2) { ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); }
+            }
+            for(let z = -gridSize; z <= gridSize; z += step) {
+                let p1 = project(-gridSize, z);
+                let p2 = project(gridSize, z);
+                if(p1 && p2) { ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); }
             }
             ctx.stroke();
 
-            // Torre (Ancho basado en diametro tip para realismo visual)
-            const w = Math.max(20, tipDiameter * 30); 
-            ctx.fillStyle = '#3a3a3a'; 
-            ctx.fillRect(centerX - w/2, torchY, w, groundY - torchY);
-            ctx.strokeStyle = '#555';
-            ctx.beginPath();
-            ctx.moveTo(centerX - w/2, torchY); ctx.lineTo(centerX - w/2, groundY);
-            ctx.moveTo(centerX + w/2, torchY); ctx.lineTo(centerX + w/2, groundY);
-            ctx.stroke();
+            // Glow Radiación
+            if(maxGroundRadiation > 0.1) {
+                const fX = flameCenter.x * 4; 
+                const fZ = flameCenter.z * 4;
+                const rotFX = fX * cosA - fZ * sinA;
+                const rotFZ = fX * sinA + fZ * cosA;
+                const perspective = 600 * cameraZoom;
+                const scale = perspective / (perspective - rotFZ);
+
+                if(scale > 0) {
+                    const glowX = centerX + (rotFX * scale);
+                    const glowY = groundY; 
+                    const glowRadius = (50 + (maxGroundRadiation * 100)) * scale * cameraZoom;
+                    const glow = ctx.createRadialGradient(glowX, glowY, 10*scale, glowX, glowY, glowRadius);
+                    const intensityAlpha = Math.min(0.6, maxGroundRadiation * 0.1); 
+                    glow.addColorStop(0, `rgba(255, 100, 0, ${intensityAlpha})`); 
+                    glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                    ctx.fillStyle = glow;
+                    ctx.save();
+                    ctx.translate(glowX, glowY);
+                    ctx.scale(1, 0.3); 
+                    ctx.beginPath(); ctx.arc(0, 0, glowRadius, 0, Math.PI*2); ctx.fill();
+                    ctx.restore();
+                }
+            }
+
+            // Antorcha y Estructura (Zoom aplicado)
+            const zoomH = cameraZoom;
+            const currentH = (groundY - torchY) * zoomH;
+            const currentTorchY = groundY - currentH;
+
+            const w = Math.max(15, tipDiameter * 20) * zoomH; 
             
-            ctx.fillStyle = '#111';
-            ctx.fillRect(centerX - (w+4)/2, torchY, w+4, 15);
+            // Sombra
+            ctx.fillStyle = 'rgba(0,0,0,0.8)';
+            ctx.beginPath();
+            ctx.moveTo(centerX - w, groundY); ctx.lineTo(centerX + w, groundY);
+            ctx.lineTo(centerX + w*1.5, groundY + 50*zoomH);
+            ctx.lineTo(centerX - w*1.5, groundY + 50*zoomH);
+            ctx.fill();
+
+            // Derrick
+            const baseW = w * 3; 
+            ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 2 * zoomH;
+            ctx.beginPath();
+            ctx.moveTo(centerX - baseW/2, groundY); ctx.lineTo(centerX - w/2, currentTorchY + 20*zoomH);
+            ctx.moveTo(centerX + baseW/2, groundY); ctx.lineTo(centerX + w/2, currentTorchY + 20*zoomH);
+            let steps = 10;
+            let dy = (groundY - currentTorchY) / steps;
+            for(let i=0; i<steps; i++) {
+                let y1 = groundY - (dy * i);
+                let y2 = groundY - (dy * (i+1));
+                let w1 = baseW/2 - ((baseW/2 - w/2) * (i/steps));
+                let w2 = baseW/2 - ((baseW/2 - w/2) * ((i+1)/steps));
+                ctx.moveTo(centerX - w1, y1); ctx.lineTo(centerX + w2, y2);
+                ctx.moveTo(centerX + w1, y1); ctx.lineTo(centerX - w2, y2);
+                ctx.moveTo(centerX - w1, y1); ctx.lineTo(centerX + w1, y1);
+            }
+            ctx.stroke();
+
+            // Stack 3D
+            const gradPipe = ctx.createLinearGradient(centerX - w/2, 0, centerX + w/2, 0);
+            gradPipe.addColorStop(0, '#111');   
+            gradPipe.addColorStop(0.2, '#333'); 
+            gradPipe.addColorStop(0.5, '#666'); 
+            gradPipe.addColorStop(0.8, '#333'); 
+            gradPipe.addColorStop(1, '#000');   
+            ctx.fillStyle = gradPipe;
+            ctx.fillRect(centerX - w/2, currentTorchY, w, groundY - currentTorchY);
+
+            // Tip
+            ctx.fillStyle = '#1a1a1a'; 
+            ctx.fillRect(centerX - (w+6*zoomH)/2, currentTorchY, w+6*zoomH, 15*zoomH);
+            ctx.fillStyle = `rgba(255, 50, 0, ${Math.random()*0.5})`;
+            ctx.fillRect(centerX - (w+4*zoomH)/2, currentTorchY, w+4*zoomH, 2*zoomH);
         }
 
         function drawWindVane3D() {
@@ -468,7 +638,8 @@
             ctx.beginPath(); ctx.arc(0,0, size/2, 0, Math.PI*2); ctx.stroke();
             ctx.fillStyle = '#666'; ctx.fillText("N", 0, -size/2 + 10);
 
-            const rad = windAngleDeg * (Math.PI / 180);
+            const rad = (windAngleDeg * (Math.PI / 180)) - cameraAngle; 
+            
             ctx.rotate(rad);
 
             ctx.beginPath();
@@ -496,6 +667,8 @@
             ctx.strokeStyle = '#00d2ff'; ctx.lineWidth = 2;
             ctx.fill(); ctx.stroke();
 
+            ctx.rotate(-cameraAngle);
+
             // Grilla
             ctx.strokeStyle = '#333'; ctx.fillStyle = '#555';
             ctx.font = "9px Arial"; ctx.textAlign = "center";
@@ -504,7 +677,12 @@
                 const rPx = d * pixelsPerMeter * mapScale;
                 if(rPx < radius) {
                     ctx.beginPath(); ctx.arc(0, 0, rPx, 0, Math.PI * 2);
-                    ctx.stroke(); ctx.fillText(d + "m", 0, -rPx + 10);
+                    ctx.stroke(); 
+                    ctx.save();
+                    ctx.translate(0, -rPx + 10);
+                    ctx.rotate(cameraAngle); 
+                    ctx.fillText(d + "m", 0, 0);
+                    ctx.restore();
                 }
             });
 
@@ -512,55 +690,59 @@
             ctx.strokeStyle = '#444'; ctx.beginPath(); 
             ctx.moveTo(0, -radius); ctx.lineTo(0, radius); 
             ctx.moveTo(-radius, 0); ctx.lineTo(radius, 0); ctx.stroke();
+            
             ctx.fillStyle = '#00d2ff'; ctx.font = "bold 11px Arial";
-            ctx.fillText("N", 0, -radius + 15); ctx.fillText("S", 0, radius - 5);
-            ctx.fillText("E", radius - 10, 4); ctx.fillText("O", -radius + 10, 4);
+            function drawLabel(text, x, y) {
+                ctx.save();
+                ctx.translate(x, y);
+                ctx.rotate(cameraAngle);
+                ctx.fillText(text, 0, 0);
+                ctx.restore();
+            }
+            drawLabel("N", 0, -radius + 15);
+            drawLabel("S", 0, radius - 5);
+            drawLabel("E", radius - 10, 4);
+            drawLabel("O", -radius + 10, 4);
 
-            // --- ZONAS DE RIESGO API 521 (SEGÚN TABLA RICARDO) ---
+            // --- ZONAS DE RIESGO ---
             const cx = flameCenter.x * mapScale;
             const cy = flameCenter.z * mapScale;
             
             function getRadiusForIntensity(kwTarget) {
                 if(kwTarget <= 0) return 0;
-                // r = sqrt( Q / (4 * pi * K) )
                 const rSphere = Math.sqrt(qRadiantGlobal / (4 * Math.PI * kwTarget));
                 return rSphere * pixelsPerMeter * mapScale;
             }
 
-            // Valores de la tabla: 9.45, 6.3, 4.75, 2.7, 1.9
             const r9_45 = getRadiusForIntensity(9.45);
             const r6_3 = getRadiusForIntensity(6.3);
             const r4_75 = getRadiusForIntensity(4.75);
             const r2_7 = getRadiusForIntensity(2.7);
             const r1_9 = getRadiusForIntensity(1.9);
 
-            // Dibujamos anillos (Outlines)
             if(maxGroundRadiation > 1.9) {
                 ctx.beginPath(); ctx.arc(cx, cy, r1_9, 0, Math.PI*2);
-                ctx.strokeStyle = '#00ff00'; ctx.lineWidth=1; ctx.stroke(); // Verde
+                ctx.strokeStyle = '#00ff00'; ctx.lineWidth=1; ctx.stroke(); 
             }
             if(maxGroundRadiation > 2.7) {
                 ctx.beginPath(); ctx.arc(cx, cy, r2_7, 0, Math.PI*2);
-                ctx.strokeStyle = '#ffcc00'; ctx.lineWidth=1; ctx.stroke(); // Amarillo
+                ctx.strokeStyle = '#ffcc00'; ctx.lineWidth=1; ctx.stroke(); 
             }
             if(maxGroundRadiation > 4.75) {
                 ctx.beginPath(); ctx.arc(cx, cy, r4_75, 0, Math.PI*2);
-                ctx.strokeStyle = '#ff6600'; ctx.lineWidth=1; ctx.stroke(); // Naranja
+                ctx.strokeStyle = '#ff6600'; ctx.lineWidth=1; ctx.stroke(); 
             }
-            
-            // Los niveles peligrosos los rellenamos un poco
             if(maxGroundRadiation > 6.3) {
                 ctx.beginPath(); ctx.arc(cx, cy, r6_3, 0, Math.PI*2);
                 ctx.fillStyle = 'rgba(255, 0, 0, 0.2)'; ctx.fill();
-                ctx.strokeStyle = '#ff0000'; ctx.lineWidth=1.5; ctx.stroke(); // Rojo
+                ctx.strokeStyle = '#ff0000'; ctx.lineWidth=1.5; ctx.stroke(); 
             }
             if(maxGroundRadiation > 9.45) {
                 ctx.beginPath(); ctx.arc(cx, cy, r9_45, 0, Math.PI*2);
                 ctx.fillStyle = 'rgba(150, 0, 0, 0.4)'; ctx.fill();
-                ctx.strokeStyle = '#990000'; ctx.lineWidth=2; ctx.stroke(); // Bordó
+                ctx.strokeStyle = '#990000'; ctx.lineWidth=2; ctx.stroke(); 
             }
 
-            // Cruz del centro
             if(maxGroundRadiation > 0.1) {
                 ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
                 ctx.beginPath(); 
@@ -569,7 +751,6 @@
                 ctx.stroke();
             }
 
-            // Base Torre
             ctx.fillStyle = '#00d2ff'; ctx.fillRect(-3, -3, 6, 6);
             ctx.restore();
         }
@@ -578,7 +759,10 @@
             calculatePhysics();
             drawScene();
             drawWindVane3D();
-
+            
+            ctx.globalCompositeOperation = 'source-over';
+            drawRadar();
+            
             ctx.globalCompositeOperation = 'lighter';
             particles.sort((a, b) => a.z - b.z);
             const spawnCount = Math.floor(gasFlow / 5);
@@ -594,7 +778,6 @@
             }
             
             ctx.globalCompositeOperation = 'source-over';
-            drawRadar();
 
             requestAnimationFrame(animate);
         }
@@ -603,11 +786,22 @@
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
             groundY = canvas.height - 50;
+            stars.length = 0;
+            for(let i=0; i<100; i++) {
+                stars.push({
+                    x: Math.random() * window.innerWidth,
+                    y: Math.random() * window.innerHeight * 0.6,
+                    size: Math.random() * 2,
+                    alpha: Math.random()
+                });
+            }
         });
 
         animate();
 
     </script>
 </body>
+</html>
 
 </html>
+
