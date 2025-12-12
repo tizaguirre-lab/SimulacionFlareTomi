@@ -3,805 +3,467 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Flare Sim - V10 Final Fixed</title>
+    <title>Flare Sim - V18 Logic Fixed</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    
     <style>
-        body {
-            margin: 0;
-            background-color: #0b0b0b;
-            color: white;
-            font-family: 'Segoe UI', monospace;
-            overflow: hidden;
-            user-select: none; 
-            touch-action: none;
-        }
+        /* --- ESTILOS APP (Oscuro) --- */
+        body { margin: 0; background-color: #0b0b0b; color: white; font-family: 'Segoe UI', monospace; overflow: hidden; user-select: none; touch-action: none; }
 
-        #help-overlay {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: rgba(255,255,255,0.5);
-            font-size: 0.8rem;
-            text-align: center;
-            pointer-events: none;
-            z-index: 5;
-        }
-
-        /* --- Panel de Controles --- */
-        #controls {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            background: rgba(15, 20, 25, 0.95);
-            padding: 20px;
-            border-left: 4px solid #00d2ff;
-            border-radius: 0 10px 10px 0;
-            box-shadow: 10px 0 30px rgba(0, 0, 0, 0.8);
-            z-index: 20; 
-            width: 300px;
-            max-height: 90vh;
-            overflow-y: auto;
-            transition: all 0.3s ease;
-        }
-
-        #dataPanel {
-            position: absolute;
-            top: 20px;
-            right: 20px; 
-            background: rgba(30, 5, 5, 0.95);
-            padding: 20px;
-            border: 1px solid #552222;
-            border-right: 4px solid #ff4444;
-            border-radius: 8px;
-            z-index: 30; 
-            width: 260px;
-            text-align: right;
-            cursor: move; 
-            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
-            backdrop-filter: blur(5px);
-        }
-
-        /* Responsive Mobile */
-        @media (max-width: 768px) {
-            #controls {
-                top: auto; bottom: 0; left: 0;
-                width: 100%; max-width: none;
-                border-left: none; border-top: 4px solid #00d2ff;
-                border-radius: 20px 20px 0 0;
-                max-height: 35vh;
-                box-sizing: border-box; padding: 15px;
-            }
-            #dataPanel {
-                width: auto;
-                left: 10px !important; right: 10px !important; top: 10px !important;
-                padding: 10px; font-size: 0.85em;
-            }
-            .metric-big { font-size: 1.8rem !important; }
-        }
-
-        .panel-header {
-            border-bottom: 1px solid #552222;
-            padding-bottom: 5px; margin-bottom: 10px; cursor: move;
-        }
-
-        h3 { margin-top: 0; color: #00d2ff; font-size: 1rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #333; padding-bottom: 5px;}
-        h4 { margin: 0; color: #ff4444; font-size: 1rem; text-transform: uppercase; display: inline-block;}
-        .drag-hint { font-size: 0.6rem; color: #884444; float: left; margin-top: 4px;}
+        /* Controles */
+        #controls { position: absolute; top: 20px; left: 20px; background: rgba(15, 20, 25, 0.95); padding: 20px; border-left: 4px solid #00d2ff; border-radius: 0 10px 10px 0; box-shadow: 10px 0 30px rgba(0, 0, 0, 0.8); z-index: 20; width: 280px; max-height: 90vh; overflow-y: auto; }
+        #dataPanel { position: absolute; top: 20px; right: 20px; background: rgba(30, 5, 5, 0.95); padding: 20px; border: 1px solid #552222; border-right: 4px solid #ff4444; border-radius: 8px; z-index: 30; width: 250px; text-align: right; cursor: move; box-shadow: 0 10px 20px rgba(0,0,0,0.5); backdrop-filter: blur(5px); }
+        
+        .btn-export { background-color: #442222; color: #ffaaaa; border: 1px solid #ff4444; padding: 10px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 15px; text-transform: uppercase; transition: 0.2s; font-size: 0.8rem; }
+        .btn-export:hover { background-color: #ff4444; color: white; }
 
         .control-group { margin-bottom: 15px; }
         .sub-group { border-top: 1px solid #333; padding-top: 10px; margin-top: 10px; }
         .sub-title { font-size: 0.75rem; color: #888; text-transform: uppercase; margin-bottom: 10px; font-weight: bold;}
-        
         label { display: block; margin-bottom: 5px; font-size: 0.8rem; color: #ccc; font-weight: 600;}
         input[type="range"] { width: 100%; cursor: pointer; accent-color: #00d2ff; height: 10px; }
         .value-display { float: right; color: #00d2ff; font-weight: bold; }
-
-        .metric-big { font-size: 2.2rem; font-weight: bold; color: #fff; margin: 5px 0; letter-spacing: -1px;}
+        .metric-big { font-size: 2rem; font-weight: bold; color: #fff; margin: 5px 0; letter-spacing: -1px;}
         .metric-unit { font-size: 1rem; color: #666; font-weight: normal;}
         .metric-sub { font-size: 0.9rem; color: #ffaaaa; margin-bottom: 10px; font-weight: bold;}
         .metric-desc { font-size: 0.7rem; color: #aaa; text-transform: uppercase;}
-
         .legend-item { display: flex; align-items: center; justify-content: flex-end; margin-top: 3px; font-size: 0.7rem; color: #bbb;}
         .dot { width: 8px; height: 8px; border-radius: 50%; margin-left: 8px; border: 1px solid rgba(255,255,255,0.2);}
-
+        h3 { margin-top: 0; color: #00d2ff; font-size: 1rem; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 5px;}
+        h4 { margin: 0; color: #ff4444; font-size: 1rem; text-transform: uppercase; display: inline-block;}
+        .drag-hint { font-size: 0.6rem; color: #884444; float: left; margin-top: 4px;}
         canvas { display: block; position: absolute; top: 0; left: 0; z-index: 1; cursor: grab;}
         canvas:active { cursor: grabbing; }
+
+        @media (max-width: 768px) {
+            #controls { top: auto; bottom: 0; left: 0; width: 100%; max-width: none; border-left: none; border-top: 4px solid #00d2ff; border-radius: 20px 20px 0 0; max-height: 35vh; box-sizing: border-box; padding: 15px; }
+            #dataPanel { width: auto; left: 10px !important; right: 10px !important; top: 10px !important; padding: 10px; font-size: 0.85em; }
+        }
+
+        /* --- ESTILOS REPORTE OCULTO --- */
+        #print-container {
+            position: absolute; top: 0; left: -9999px; /* Oculto */
+            width: 794px; background: white; color: black;
+            padding: 40px; box-sizing: border-box;
+            font-family: 'Segoe UI', sans-serif;
+            visibility: hidden; 
+        }
+        
+        .rep-header { border-bottom: 3px solid #333; padding-bottom: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end; }
+        .rep-title { font-size: 24px; font-weight: 800; color: #222; line-height: 1.1; }
+        .rep-meta { text-align: right; font-size: 11px; color: #666; }
+        
+        .rep-section { margin-bottom: 25px; page-break-inside: avoid; }
+        .rep-sec-title { font-size: 14px; font-weight: 700; color: #0055aa; text-transform: uppercase; border-bottom: 1px solid #ccc; margin-bottom: 10px; padding-bottom: 3px; }
+        
+        .rep-box { background: #f8f8f8; border: 1px solid #ddd; padding: 15px; border-radius: 4px; text-align: center; }
+        .rep-val-big { font-size: 32px; font-weight: 800; color: #333; display: block; margin: 5px 0; transition: color 0.3s;}
+        .rep-label { font-size: 11px; text-transform: uppercase; color: #666; font-weight: 600; }
+
+        .rep-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .rep-table td { padding: 6px 8px; border-bottom: 1px solid #eee; }
+        .rep-table td:first-child { font-weight: 600; color: #444; width: 50%; background: #fdfdfd; }
+        
+        .rep-visuals { display: flex; justify-content: space-between; gap: 20px; margin-top: 15px; }
+        .rep-vis-col { width: 48%; }
+        .rep-canvas-img { width: 100%; border: 1px solid #eee; background: #fff; }
+        .rep-caption { font-size: 10px; color: #777; text-align: center; margin-top: 4px; font-style: italic; }
+
+        .rep-api-table th { background: #eee; font-weight: bold; text-align: left; padding: 6px; font-size: 11px; border-bottom: 2px solid #ccc; }
+        .rep-api-table td { border: 1px solid #ddd; padding: 5px; font-size: 11px; vertical-align: middle;}
+        .color-swatch { display: inline-block; width: 12px; height: 12px; margin-right: 8px; border: 1px solid rgba(0,0,0,0.1); vertical-align: middle; border-radius: 2px;}
     </style>
 </head>
 <body>
 
-    <div id="help-overlay">
-        🖱️ Arrastra para GIRAR | 🖱️ Rueda para ZOOM
-    </div>
+    <div id="help-overlay" style="position:absolute; bottom:20px; left:50%; transform:translateX(-50%); color:rgba(255,255,255,0.5); font-size:0.8rem; pointer-events:none; z-index:5;">🖱️ Arrastra para GIRAR | 🖱️ Rueda para ZOOM</div>
 
     <div id="controls">
-        <h3>Parámetros Operativos</h3>
-        
-        <div class="control-group">
-            <label>Altura Stack (m) <span class="value-display" id="heightVal">60</span></label>
-            <input type="range" id="stackHeight" min="10" max="150" value="60" step="1">
-        </div>
-
-        <div class="control-group">
-            <label>Viento (m/s) <span class="value-display" id="windSpeedVal">5.0</span></label>
-            <input type="range" id="windSpeed" min="0" max="30" value="5" step="0.5">
-        </div>
-
-        <div class="control-group">
-            <label>Dirección Viento <span class="value-display" id="windDirVal">0° (N)</span></label>
-            <input type="range" id="windAngle" min="0" max="360" value="0" step="1">
-        </div>
-
-        <div class="control-group">
-            <label>Caudal Gas (t/h) <span class="value-display" id="flowVal">40</span></label>
-            <input type="range" id="gasFlow" min="5" max="150" value="40">
-        </div>
-
+        <h3>Parámetros</h3>
+        <div class="control-group"><label>Altura Stack (m) <span class="value-display" id="heightVal">60</span></label><input type="range" id="stackHeight" min="10" max="150" value="60" step="1"></div>
+        <div class="control-group"><label>Viento (m/s) <span class="value-display" id="windSpeedVal">5.0</span></label><input type="range" id="windSpeed" min="0" max="30" value="5" step="0.5"></div>
+        <div class="control-group"><label>Dirección Viento <span class="value-display" id="windDirVal">0° (N)</span></label><input type="range" id="windAngle" min="0" max="360" value="0" step="1"></div>
+        <div class="control-group"><label>Caudal Gas (t/h) <span class="value-display" id="flowVal">40</span></label><input type="range" id="gasFlow" min="5" max="150" value="40"></div>
         <div class="sub-group">
             <div class="sub-title">Asunciones de Diseño</div>
-            
-            <div class="control-group">
-                <label>Diámetro Tip (m) <span class="value-display" id="diamVal">0.8</span></label>
-                <input type="range" id="tipDiam" min="0.2" max="2.0" value="0.8" step="0.1">
-            </div>
-
-            <div class="control-group">
-                <label>LHV (kWh/t) <span class="value-display" id="lhvVal">12900</span></label>
-                <input type="range" id="lhvInput" min="8000" max="15000" value="12900" step="100">
-            </div>
-
-            <div class="control-group">
-                <label>Fracción Radiante (F) <span class="value-display" id="fVal">0.30</span></label>
-                <input type="range" id="fInput" min="0.10" max="0.50" value="0.30" step="0.01">
-            </div>
+            <div class="control-group"><label>Diámetro Tip (m) <span class="value-display" id="diamVal">0.8</span></label><input type="range" id="tipDiam" min="0.2" max="2.0" value="0.8" step="0.1"></div>
+            <div class="control-group"><label>LHV (kWh/t) <span class="value-display" id="lhvVal">12900</span></label><input type="range" id="lhvInput" min="8000" max="15000" value="12900" step="100"></div>
+            <div class="control-group"><label>Fracción (F) <span class="value-display" id="fVal">0.30</span></label><input type="range" id="fInput" min="0.10" max="0.50" value="0.30" step="0.01"></div>
         </div>
     </div>
 
     <div id="dataPanel">
-        <div class="panel-header">
-            <span class="drag-hint">::: ARRASTRAR :::</span>
-            <h4>Monitor SEP (API 521)</h4>
-        </div>
-
+        <div class="panel-header"><span class="drag-hint">::: ARRASTRAR :::</span><h4>Monitor SEP</h4></div>
         <div class="metric-desc">Radiación Máx en Suelo</div>
         <div class="metric-big"><span id="radValue">0.0</span> <span class="metric-unit">kW/m²</span></div>
         <div class="metric-desc">Ubicación del Máximo</div>
         <div class="metric-sub" id="radLoc">0m N, 0m E</div>
-        
         <div style="border-top: 1px solid #442222; margin: 10px 0;"></div>
-        
         <div class="metric-desc">Niveles API 521</div>
         <div class="legend-item">Daño Estructural (>9.45) <span class="dot" style="background: #990000;"></span></div>
         <div class="legend-item">Escape Emergencia (>6.3) <span class="dot" style="background: #ff0000;"></span></div>
-        <div class="legend-item">Límite Personal 2min (>4.75) <span class="dot" style="background: #ff6600;"></span></div>
+        <div class="legend-item">Límite Personal (>4.75) <span class="dot" style="background: #ff6600;"></span></div>
         <div class="legend-item">Expo. Limitada (>2.7) <span class="dot" style="background: #ffcc00;"></span></div>
         <div class="legend-item">Expo. Continua (>1.9) <span class="dot" style="background: #00ff00;"></span></div>
+        <button class="btn-export" onclick="generateReport()">📄 Descargar PDF</button>
     </div>
 
     <canvas id="canvas"></canvas>
 
+    <div id="print-container">
+        <div class="rep-header">
+            <div class="rep-title">INFORME TÉCNICO:<br>SIMULACIÓN DE ANTORCHA</div>
+            <div class="rep-meta">
+                <strong>Fecha:</strong> <span id="r-date"></span><br>
+                <strong>Metodología:</strong> API 521 (Simple Point Source)
+            </div>
+        </div>
+
+        <div class="rep-section">
+            <div class="rep-sec-title">1. Resumen de Resultados</div>
+            <div class="rep-box">
+                <span class="rep-label">Radiación Térmica Máxima (Nivel Suelo)</span>
+                <span class="rep-val-big" id="r-rad">0.00 kW/m²</span>
+                <span class="rep-label" style="color:#333;">Ubicación: <span id="r-loc" style="font-weight:bold;"></span></span>
+            </div>
+        </div>
+
+        <div class="rep-section">
+            <div class="rep-sec-title">2. Parámetros de Diseño y Visualización</div>
+            <div class="rep-visuals">
+                <div class="rep-vis-col">
+                    <table class="rep-table">
+                        <tr><td>Caudal de Gas</td><td id="r-flow"></td></tr>
+                        <tr><td>Altura Stack</td><td id="r-height"></td></tr>
+                        <tr><td>Diámetro Tip</td><td id="r-diam"></td></tr>
+                        <tr><td>Viento</td><td id="r-wind"></td></tr>
+                        <tr><td>LHV</td><td id="r-lhv"></td></tr>
+                        <tr><td>Fracción (F)</td><td id="r-f"></td></tr>
+                    </table>
+                    <div style="margin-top:15px; border:1px solid #ddd; padding:5px;">
+                        <img id="img-schema" class="rep-canvas-img" />
+                    </div>
+                    <div class="rep-caption">Fig 1. Esquema Constructivo</div>
+                </div>
+                <div class="rep-vis-col">
+                    <div style="border:1px solid #ddd; padding:5px; height:100%;">
+                        <img id="img-radar" class="rep-canvas-img" />
+                    </div>
+                    <div class="rep-caption">Fig 2. Curvas de Iso-Radiación (Planta)</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="rep-section">
+            <div class="rep-sec-title">Anexo: Niveles de Referencia (API 521)</div>
+            <table class="rep-table rep-api-table">
+                <tr><th>Nivel (kW/m²)</th><th>Consecuencia / Límite</th></tr>
+                <tr><td><span class="color-swatch" style="background:#900;"></span> > 9.45</td><td>Daño a equipos y estructuras.</td></tr>
+                <tr><td><span class="color-swatch" style="background:#f00;"></span> > 6.30</td><td>Escape de emergencia necesario.</td></tr>
+                <tr><td><span class="color-swatch" style="background:#f60;"></span> > 4.75</td><td>Límite para personal (2-3 min) con ropa adecuada.</td></tr>
+                <tr><td><span class="color-swatch" style="background:#fa0;"></span> > 2.70</td><td>Exposición limitada.</td></tr>
+                <tr><td><span class="color-swatch" style="background:#0a0;"></span> > 1.90</td><td>Exposición continua permitida.</td></tr>
+            </table>
+        </div>
+    </div>
+
+    <canvas id="c-schema" width="400" height="300" style="display:none;"></canvas>
+    <canvas id="c-radar" width="400" height="400" style="display:none;"></canvas>
+
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
 
-        // --- CÁMARA 3D ---
-        let cameraAngle = 0; 
-        let cameraZoom = 1.0; 
-        let isCamDragging = false;
-        let lastCamX = 0;
+        // Variables
+        let particles = [], stars = [];
+        let windSpeed=5, windAngleDeg=0, gasFlow=40, stackHeightMeters=60, tipDiameter=0.8, lhvValue=12900, radFraction=0.30;
+        let flameCenter = {x:0, y:0, z:0}, maxGroundRadiation=0, qRadiantGlobal=0;
+        let groundY = canvas.height - 50, torchY = 0, centerX = canvas.width/2, pixelsPerMeter = 4;
+        let cameraAngle=0, cameraZoom=1.0, isCamDragging=false, lastCamX=0;
 
-        // Listeners para la Cámara
-        canvas.addEventListener('mousedown', (e) => {
-            isCamDragging = true;
-            lastCamX = e.clientX;
-        });
-        window.addEventListener('mousemove', (e) => {
-            if(isCamDragging) {
-                const deltaX = e.clientX - lastCamX;
-                cameraAngle += deltaX * 0.005; 
-                lastCamX = e.clientX;
-            }
-        });
-        window.addEventListener('mouseup', () => isCamDragging = false);
+        // UI
+        const ui = {
+            h: document.getElementById('stackHeight'), w: document.getElementById('windSpeed'), a: document.getElementById('windAngle'),
+            fl: document.getElementById('gasFlow'), d: document.getElementById('tipDiam'), lhv: document.getElementById('lhvInput'),
+            f: document.getElementById('fInput'), panel: document.getElementById('dataPanel')
+        };
 
-        // Zoom
-        canvas.addEventListener('wheel', (e) => {
-            e.preventDefault();
-            const delta = e.deltaY * -0.001;
-            cameraZoom += delta;
-            if(cameraZoom < 0.5) cameraZoom = 0.5;
-            if(cameraZoom > 2.5) cameraZoom = 2.5;
-        });
+        ui.h.addEventListener('input', (e)=>{ stackHeightMeters=parseInt(e.target.value); document.getElementById('heightVal').innerText=stackHeightMeters; particles=[]; });
+        ui.w.addEventListener('input', (e)=>{ windSpeed=parseFloat(e.target.value); document.getElementById('windSpeedVal').innerText=windSpeed.toFixed(1); });
+        ui.a.addEventListener('input', (e)=>{ windAngleDeg=parseInt(e.target.value); const d=["N","NE","E","SE","S","SO","O","NO"]; document.getElementById('windDirVal').innerText=windAngleDeg+"° ("+d[Math.round(windAngleDeg/45)%8]+")"; });
+        ui.fl.addEventListener('input', (e)=>{ gasFlow=parseInt(e.target.value); document.getElementById('flowVal').innerText=gasFlow; });
+        ui.d.addEventListener('input', (e)=>{ tipDiameter=parseFloat(e.target.value); document.getElementById('diamVal').innerText=tipDiameter; });
+        ui.lhv.addEventListener('input', (e)=>{ lhvValue=parseInt(e.target.value); document.getElementById('lhvVal').innerText=lhvValue; });
+        ui.f.addEventListener('input', (e)=>{ radFraction=parseFloat(e.target.value); document.getElementById('fVal').innerText=radFraction.toFixed(2); });
 
-        // Touch
-        canvas.addEventListener('touchstart', (e) => {
-            if(e.touches.length === 1) {
-                lastCamX = e.touches[0].clientX;
-                isCamDragging = true;
-            }
-        });
-        canvas.addEventListener('touchmove', (e) => {
-            if(isCamDragging && e.touches.length === 1) {
-                const deltaX = e.touches[0].clientX - lastCamX;
-                cameraAngle += deltaX * 0.005;
-                lastCamX = e.touches[0].clientX;
-            }
-        });
-        canvas.addEventListener('touchend', () => isCamDragging = false);
+        // Cámara
+        canvas.addEventListener('mousedown', (e)=>{ isCamDragging=true; lastCamX=e.clientX; });
+        window.addEventListener('mousemove', (e)=>{ if(isCamDragging){ cameraAngle+=(e.clientX-lastCamX)*0.005; lastCamX=e.clientX; } });
+        window.addEventListener('mouseup', ()=>{ isCamDragging=false; });
+        canvas.addEventListener('wheel', (e)=>{ e.preventDefault(); cameraZoom+=e.deltaY*-0.001; if(cameraZoom<0.5)cameraZoom=0.5; if(cameraZoom>2.5)cameraZoom=2.5; });
+        canvas.addEventListener('touchstart', (e)=>{ if(e.touches.length===1){ lastCamX=e.touches[0].clientX; isCamDragging=true; } });
+        canvas.addEventListener('touchmove', (e)=>{ if(isCamDragging&&e.touches.length===1){ cameraAngle+=(e.touches[0].clientX-lastCamX)*0.005; lastCamX=e.touches[0].clientX; } });
+        canvas.addEventListener('touchend', ()=>{ isCamDragging=false; });
 
+        // Panel Drag
+        let isPD=false, sX, sY, iL, iT;
+        ui.panel.addEventListener('mousedown', (e)=>{ e.stopPropagation(); isPD=true; sX=e.clientX; sY=e.clientY; const r=ui.panel.getBoundingClientRect(); iL=r.left; iT=r.top; ui.panel.style.cursor='grabbing'; });
+        window.addEventListener('mousemove', (e)=>{ if(isPD){ ui.panel.style.right='auto'; ui.panel.style.left=(iL+(e.clientX-sX))+'px'; ui.panel.style.top=(iT+(e.clientY-sY))+'px'; } });
+        window.addEventListener('mouseup', ()=>{ isPD=false; ui.panel.style.cursor='move'; });
+        ui.panel.addEventListener('touchstart', (e)=>{ e.stopPropagation(); isPD=true; sX=e.touches[0].clientX; sY=e.touches[0].clientY; const r=ui.panel.getBoundingClientRect(); iL=r.left; iT=r.top; }, {passive:false});
+        window.addEventListener('touchmove', (e)=>{ if(isPD){ ui.panel.style.right='auto'; ui.panel.style.left=(iL+(e.touches[0].clientX-sX))+'px'; ui.panel.style.top=(iT+(e.touches[0].clientY-sY))+'px'; } }, {passive:false});
+        window.addEventListener('touchend', ()=>{ isPD=false; });
 
-        // --- UI Arrastrable ---
-        const draggable = document.getElementById('dataPanel');
-        let isPanelDragging = false;
-        let startX, startY, initialLeft, initialTop;
+        for(let i=0; i<100; i++) stars.push({x:Math.random()*window.innerWidth, y:Math.random()*window.innerHeight*0.6, size:Math.random()*2, alpha:Math.random()});
 
-        function startDrag(clientX, clientY) {
-            isPanelDragging = true;
-            startX = clientX;
-            startY = clientY;
-            const rect = draggable.getBoundingClientRect();
-            initialLeft = rect.left;
-            initialTop = rect.top;
-            draggable.style.cursor = 'grabbing';
-            draggable.style.opacity = '0.7';
+        /* --- GENERACIÓN DEL REPORTE --- */
+        async function generateReport() {
+            const d = new Date();
+            document.getElementById('r-date').innerText = d.toLocaleString();
+            
+            const rRadEl = document.getElementById('r-rad');
+            rRadEl.innerText = maxGroundRadiation.toFixed(2) + " kW/m²";
+            // Color matching
+            if(maxGroundRadiation > 9.45) rRadEl.style.color = '#900';
+            else if(maxGroundRadiation > 6.3) rRadEl.style.color = '#f00';
+            else if(maxGroundRadiation > 4.75) rRadEl.style.color = '#f60';
+            else if(maxGroundRadiation > 2.7) rRadEl.style.color = '#fa0';
+            else if(maxGroundRadiation > 1.9) rRadEl.style.color = '#0a0';
+            else rRadEl.style.color = '#333';
+
+            document.getElementById('r-loc').innerText = document.getElementById('radLoc').innerText;
+            document.getElementById('r-flow').innerText = gasFlow + " t/h";
+            document.getElementById('r-height').innerText = stackHeightMeters + " m";
+            document.getElementById('r-diam').innerText = tipDiameter + " m";
+            document.getElementById('r-wind').innerText = windSpeed + " m/s (" + document.getElementById('windDirVal').innerText + ")";
+            document.getElementById('r-lhv').innerText = lhvValue + " kWh/t";
+            document.getElementById('r-f').innerText = radFraction;
+
+            drawReportSchema();
+            drawReportRadarImg();
+
+            const cSchema = document.getElementById('c-schema');
+            const cRadar = document.getElementById('c-radar');
+            document.getElementById('img-schema').src = cSchema.toDataURL('image/png');
+            document.getElementById('img-radar').src = cRadar.toDataURL('image/png');
+
+            await new Promise(r => setTimeout(r, 100));
+
+            const element = document.getElementById('print-container');
+            element.style.visibility = 'visible'; 
+            const canvasRender = await html2canvas(element, { scale: 2 });
+            element.style.visibility = 'hidden';
+
+            const imgDataReport = canvasRender.toDataURL('image/jpeg', 1.0);
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('p', 'mm', 'a4');
+            const w = doc.internal.pageSize.getWidth();
+            const h = (canvasRender.height * w) / canvasRender.width;
+            
+            doc.addImage(imgDataReport, 'JPEG', 0, 0, w, h);
+            doc.save(`Informe_Flare_${d.toISOString().slice(0,10)}.pdf`);
         }
 
-        function moveDrag(clientX, clientY) {
-            if (!isPanelDragging) return;
-            const dx = clientX - startX;
-            const dy = clientY - startY;
-            draggable.style.right = 'auto'; 
-            draggable.style.left = `${initialLeft + dx}px`;
-            draggable.style.top = `${initialTop + dy}px`;
+        function drawReportSchema() {
+            const c = document.getElementById('c-schema'); const cx = c.getContext('2d');
+            cx.clearRect(0,0,c.width,c.height); cx.fillStyle='white'; cx.fillRect(0,0,c.width,c.height);
+            cx.strokeStyle='#333'; cx.fillStyle='#333'; cx.font="14px Arial"; cx.textAlign="center"; cx.lineWidth=2;
+            const gY=250, cX=100;
+            cx.beginPath(); cx.moveTo(20,gY); cx.lineTo(180,gY); cx.stroke();
+            cx.lineWidth=1; for(let i=20;i<180;i+=8){cx.moveTo(i,gY);cx.lineTo(i-4,gY+4);} cx.stroke();
+            const h=180, tY=gY-h, bW=50, tW=15;
+            cx.lineWidth=2; cx.beginPath(); cx.moveTo(cX-bW/2,gY); cx.lineTo(cX-tW/2,tY); cx.moveTo(cX+bW/2,gY); cx.lineTo(cX+tW/2,tY);
+            cx.moveTo(cX-bW/2,gY); cx.lineTo(cX+bW/2,gY-60); cx.lineTo(cX-bW/2+8,gY-120); cx.lineTo(cX-tW/2,tY); cx.strokeRect(cX-tW/2, tY-5, tW, 5); cx.stroke();
+            cx.strokeStyle='#d00'; cx.fillStyle='#d00'; const dX=cX+40;
+            cx.beginPath(); cx.moveTo(dX,gY); cx.lineTo(dX,tY-5); cx.stroke();
+            cx.beginPath(); cx.moveTo(dX-4,gY-8); cx.lineTo(dX,gY); cx.lineTo(dX+4,gY-8); cx.fill();
+            cx.beginPath(); cx.moveTo(dX-4,tY+3); cx.lineTo(dX,tY-5); cx.lineTo(dX+4,tY+3); cx.fill();
+            cx.fillText(`h=${stackHeightMeters}m`, dX+10, gY-h/2); cx.fillStyle='#000'; cx.fillText("VISTA FRENTE", cX, 30);
+            const tcX=300, tcY=130;
+            cx.strokeStyle='#333'; cx.lineWidth=3; cx.beginPath(); cx.arc(tcX,tcY,30,0,Math.PI*2); cx.stroke();
+            cx.lineWidth=1; cx.beginPath(); cx.arc(tcX,tcY,22,0,Math.PI*2); cx.stroke();
+            cx.strokeStyle='#d00'; cx.fillStyle='#d00'; cx.beginPath(); cx.moveTo(tcX-30, tcY+40); cx.lineTo(tcX+30, tcY+40); cx.stroke();
+            cx.fillText(`Ø=${tipDiameter}m`, tcX, tcY+58); cx.fillStyle='#000'; cx.fillText("TIP", tcX, 30);
         }
 
-        function endDrag() {
-            isPanelDragging = false;
-            draggable.style.cursor = 'move';
-            draggable.style.opacity = '0.9';
-        }
-
-        draggable.addEventListener('mousedown', (e) => {
-            e.stopPropagation(); 
-            startDrag(e.clientX, e.clientY);
-        });
-        window.addEventListener('mousemove', (e) => moveDrag(e.clientX, e.clientY));
-        window.addEventListener('mouseup', endDrag);
-        draggable.addEventListener('touchstart', (e) => {
-            e.stopPropagation();
-            startDrag(e.touches[0].clientX, e.touches[0].clientY);
-        }, {passive: false});
-
-
-        // --- Variables del Sistema ---
-        let particles = [];
-        let windSpeed = 5;
-        let windAngleDeg = 0; 
-        let gasFlow = 40;
-        let stackHeightMeters = 60; 
-        
-        let tipDiameter = 0.8;
-        let lhvValue = 12900;
-        let radFraction = 0.30;
-
-        let flameCenter = { x: 0, y: 0, z: 0 };
-        let maxGroundRadiation = 0;
-        let qRadiantGlobal = 0; 
-
-        // Visuales
-        let groundY = canvas.height - 50; 
-        let torchY = 0; 
-        const centerX = canvas.width / 2;
-        const pixelsPerMeter = 4; 
-
-        // Estrellas
-        const stars = [];
-        for(let i=0; i<100; i++) {
-            stars.push({
-                x: Math.random() * window.innerWidth,
-                y: Math.random() * window.innerHeight * 0.6,
-                size: Math.random() * 2,
-                alpha: Math.random()
+        // Radar para PDF (Fondo Blanco)
+        function drawReportRadarImg() {
+            const c = document.getElementById('c-radar'); const cx = c.getContext('2d');
+            const w=c.width, h=c.height, cX=w/2, cY=h/2;
+            cx.clearRect(0,0,w,h); cx.fillStyle='white'; cx.fillRect(0,0,w,h);
+            const scalePx = (h/2 - 40) / 150; 
+            cx.strokeStyle='#ddd'; cx.lineWidth=1; cx.textAlign="center"; cx.fillStyle="#666"; cx.font="12px Arial";
+            [50, 100, 150].forEach(d => { const r = d * scalePx; cx.beginPath(); cx.arc(cX, cY, r, 0, Math.PI*2); cx.stroke(); cx.fillText(d+"m", cX, cY - r - 2); });
+            cx.strokeStyle='#aaa'; cx.beginPath(); cx.moveTo(cX,0); cx.lineTo(cX,h); cx.stroke(); cx.beginPath(); cx.moveTo(0,cY); cx.lineTo(w,cY); cx.stroke();
+            cx.fillStyle='#000'; cx.font="bold 14px Arial"; cx.fillText("N", cX, 15); cx.fillText("S", cX, h-5); cx.fillText("E", w-10, cY+5); cx.fillText("O", 10, cY+5);
+            
+            function getR(kw) { if(kw<=0)return 0; return Math.sqrt(qRadiantGlobal/(4*Math.PI*kw)) * scalePx; }
+            const niveles = [{k:1.9,c:'rgba(0,255,0,0.1)',s:'#0a0'}, {k:2.7,c:'rgba(255,200,0,0.1)',s:'#fa0'}, {k:4.75,c:'rgba(255,100,0,0.2)',s:'#f60'}, {k:6.3,c:'rgba(255,0,0,0.2)',s:'#f00'}, {k:9.45,c:'rgba(150,0,0,0.3)',s:'#900'}];
+            const fxM = flameCenter.x/pixelsPerMeter, fzM = flameCenter.z/pixelsPerMeter;
+            const rcX = cX + (fxM * scalePx), rcY = cY + (fzM * scalePx);
+            
+            // LÓGICA CORREGIDA: Solo dibujar si se supera el nivel
+            niveles.forEach(n => { 
+                if(maxGroundRadiation >= n.k) {
+                    const r = getR(n.k); 
+                    if(r>0){ cx.beginPath(); cx.arc(rcX, rcY, r, 0, Math.PI*2); cx.fillStyle=n.c; cx.fill(); cx.strokeStyle=n.s; cx.stroke(); } 
+                }
             });
+            
+            if(maxGroundRadiation>0.1){ cx.strokeStyle='#000'; cx.lineWidth=2; cx.beginPath(); cx.moveTo(rcX-5,rcY-5); cx.lineTo(rcX+5,rcY+5); cx.moveTo(rcX+5,rcY-5); cx.lineTo(rcX-5,rcY+5); cx.stroke(); }
+            cx.fillStyle='#00d2ff'; cx.fillRect(cX-4,cY-4,8,8);
         }
 
-        // --- Inputs UI ---
-        const uiHeight = document.getElementById('stackHeight');
-        const uiWindSpeed = document.getElementById('windSpeed');
-        const uiWindAngle = document.getElementById('windAngle');
-        const uiGasFlow = document.getElementById('gasFlow');
-        const uiTipDiam = document.getElementById('tipDiam');
-        const uiLhv = document.getElementById('lhvInput');
-        const uiF = document.getElementById('fInput');
-        
-        uiHeight.addEventListener('input', (e) => {
-            stackHeightMeters = parseInt(e.target.value);
-            document.getElementById('heightVal').innerText = stackHeightMeters;
-            particles = []; 
-        });
-        uiWindSpeed.addEventListener('input', (e) => {
-            windSpeed = parseFloat(e.target.value);
-            document.getElementById('windSpeedVal').innerText = windSpeed.toFixed(1);
-        });
-        uiWindAngle.addEventListener('input', (e) => {
-            windAngleDeg = parseInt(e.target.value);
-            const dirs = ["N", "NE", "E", "SE", "S", "SO", "O", "NO"];
-            const index = Math.round(windAngleDeg / 45) % 8;
-            document.getElementById('windDirVal').innerText = windAngleDeg + "° (" + dirs[index] + ")";
-        });
-        uiGasFlow.addEventListener('input', (e) => {
-            gasFlow = parseInt(e.target.value);
-            document.getElementById('flowVal').innerText = gasFlow;
-        });
-        uiTipDiam.addEventListener('input', (e) => {
-            tipDiameter = parseFloat(e.target.value);
-            document.getElementById('diamVal').innerText = tipDiameter;
-        });
-        uiLhv.addEventListener('input', (e) => {
-            lhvValue = parseInt(e.target.value);
-            document.getElementById('lhvVal').innerText = lhvValue;
-        });
-        uiF.addEventListener('input', (e) => {
-            radFraction = parseFloat(e.target.value);
-            document.getElementById('fVal').innerText = radFraction.toFixed(2);
-        });
-
-        // --- Sistema de Partículas ---
+        // --- SIMULACIÓN ---
         class Particle {
             constructor() {
-                this.x = (Math.random() - 0.5) * (tipDiameter * 3); 
-                this.y = 0; 
-                this.z = (Math.random() - 0.5) * (tipDiameter * 3);
-
-                const velocityFactor = gasFlow / (tipDiameter * tipDiameter); 
-                const velocityY = (Math.random() * 2 + 1) + (velocityFactor * 0.05);
-
-                this.vx = (Math.random() - 0.5) * 1.5; 
-                this.vy = -velocityY; 
-                this.vz = (Math.random() - 0.5) * 1.5; 
-
-                this.baseSize = Math.random() * 15 + 10 + (gasFlow/5);
-                this.life = 100;
-                this.r = 255;
-                this.g = Math.floor(Math.random() * 150 + 100);
+                this.x = (Math.random()-0.5)*(tipDiameter*3); this.y = 0; this.z = (Math.random()-0.5)*(tipDiameter*3);
+                const vFactor = gasFlow/(tipDiameter*tipDiameter); const vy = (Math.random()*2+1)+(vFactor*0.05);
+                this.vx = (Math.random()-0.5)*1.5; this.vy = -vy; this.vz = (Math.random()-0.5)*1.5;
+                this.baseSize = Math.random()*15+10+(gasFlow/5); this.life = 100;
+                this.r = 255; this.g = Math.floor(Math.random()*150+100);
             }
-
             update() {
-                const rad = (windAngleDeg - 90) * (Math.PI / 180);
-                const stiffness = 1 / (Math.abs(this.vy) + 0.1);
-                const windFactor = (100 - this.life) * 0.005 * stiffness; 
-                
-                const windX = Math.cos(rad) * windSpeed * windFactor;
-                const windZ = Math.sin(rad) * windSpeed * windFactor;
-
-                this.vx += windX;
-                this.vz += windZ;
-                this.vy *= 0.96; 
-                if(this.vy > -1.5) this.vy = -1.5; 
-
-                this.x += this.vx;
-                this.y += this.vy;
-                this.z += this.vz;
-
-                this.life -= 1.8;
-                this.baseSize *= 0.96;
-                if (this.life < 60) this.g -= 8;
+                const rad = (windAngleDeg-90)*(Math.PI/180);
+                const stiffness = 1/(Math.abs(this.vy)+0.1);
+                const wFactor = (100-this.life)*0.005*stiffness;
+                this.vx += Math.cos(rad)*windSpeed*wFactor; this.vz += Math.sin(rad)*windSpeed*wFactor;
+                this.vy *= 0.96; if(this.vy > -1.5) this.vy = -1.5;
+                this.x+=this.vx; this.y+=this.vy; this.z+=this.vz;
+                this.life-=1.8; this.baseSize*=0.96; if(this.life<60) this.g-=8;
             }
-
             draw() {
-                const cosA = Math.cos(cameraAngle);
-                const sinA = Math.sin(cameraAngle);
-                
-                const rotX = this.x * cosA - this.z * sinA;
-                const rotZ = this.x * sinA + this.z * cosA;
-
-                const perspective = 600 * cameraZoom;
-                let scale = perspective / (perspective - rotZ);
-                
-                const screenX = centerX + (rotX * scale);
-                
-                // --- ARREGLO DE ANCLAJE (Anchor Fix) ---
-                // Calculamos la posición visual de la punta de la antorcha afectada por el zoom
-                const visualStackHeight = (groundY - torchY) * cameraZoom;
-                const currentTipY = groundY - visualStackHeight;
-
-                // La posición Y de la partícula se basa en esa punta visual
-                // Ajustamos 'this.y' por el scale (perspectiva) y el cameraZoom (tamaño)
-                const screenY = currentTipY + (this.y * scale * cameraZoom);
-
-                const screenSize = this.baseSize * scale * cameraZoom;
-
-                if (scale > 0) {
-                    ctx.beginPath();
-                    ctx.arc(screenX, screenY, Math.max(0, screenSize), 0, Math.PI * 2);
-                    const alpha = this.life / 100;
-                    let color = `rgba(${this.r}, ${this.g}, 0, ${alpha})`;
-                    if (this.life < 25) color = `rgba(60, 60, 60, ${alpha * 0.4})`;
-                    ctx.fillStyle = color;
-                    ctx.fill();
+                const cosA=Math.cos(cameraAngle), sinA=Math.sin(cameraAngle);
+                const rx = this.x*cosA - this.z*sinA; const rz = this.x*sinA + this.z*cosA;
+                const persp = 600*cameraZoom; let scale = persp/(persp-rz);
+                const vStackH = (groundY-torchY)*cameraZoom; const tipY = groundY-vStackH;
+                const sx = centerX+(rx*scale); const sy = tipY+(this.y*scale*cameraZoom);
+                const ss = this.baseSize*scale*cameraZoom;
+                if(scale>0) {
+                    ctx.beginPath(); ctx.arc(sx, sy, Math.max(0, ss), 0, Math.PI*2);
+                    const a = this.life/100; let c = `rgba(${this.r},${this.g},0,${a})`;
+                    if(this.life<25) c=`rgba(60,60,60,${a*0.4})`;
+                    ctx.fillStyle=c; ctx.fill();
                 }
             }
         }
 
-        // --- Física ---
         function calculatePhysics() {
-            // Cálculo base sin zoom para física
-            const visualHeight = stackHeightMeters * pixelsPerMeter;
-            torchY = groundY - visualHeight;
+            const vH = stackHeightMeters*pixelsPerMeter; torchY = groundY - vH;
+            if(particles.length===0){ flameCenter={x:0,y:0,z:0}; maxGroundRadiation=0; return; }
+            let sx=0, sy=0, sz=0, c=0;
+            for(let p of particles){ if(p.life>40){ sx+=p.x; sy+=p.y; sz+=p.z; c++; } }
+            if(c>0) flameCenter = {x:sx/c, y:sy/c, z:sz/c};
+            const fRise = Math.abs(flameCenter.y);
+            const totH = stackHeightMeters + (fRise/pixelsPerMeter);
+            const distSq = totH*totH;
+            qRadiantGlobal = (gasFlow*lhvValue) * radFraction;
+            maxGroundRadiation = qRadiantGlobal / (4*Math.PI*distSq);
 
-            if (particles.length === 0) {
-                flameCenter = {x:0, y:0, z:0};
-                maxGroundRadiation = 0;
-                return;
-            }
+            const dr = document.getElementById('radValue');
+            dr.innerText = maxGroundRadiation.toFixed(2);
+            if(maxGroundRadiation>9.45) dr.style.color='#900';
+            else if(maxGroundRadiation>6.3) dr.style.color='#f00';
+            else if(maxGroundRadiation>4.75) dr.style.color='#f60';
+            else if(maxGroundRadiation>2.7) dr.style.color='#fc0';
+            else if(maxGroundRadiation>1.9) dr.style.color='#0f0';
+            else dr.style.color='#fff';
 
-            let sumX = 0, sumY = 0, sumZ = 0, count = 0;
-            for(let p of particles) {
-                if(p.life > 40) { 
-                    sumX += p.x;
-                    sumY += p.y;
-                    sumZ += p.z;
-                    count++;
-                }
-            }
-
-            if(count > 0) {
-                flameCenter = {
-                    x: sumX / count,
-                    y: sumY / count,
-                    z: sumZ / count
-                };
-            }
-
-            const flameRise = Math.abs(flameCenter.y); 
-            const totalHeight = stackHeightMeters + (flameRise / pixelsPerMeter); 
-            const distSq = totalHeight * totalHeight; 
-
-            const qThermal = gasFlow * lhvValue; 
-            const F = radFraction;
-            qRadiantGlobal = qThermal * F; 
-
-            let kw = qRadiantGlobal / (4 * Math.PI * distSq);
-            maxGroundRadiation = kw;
-
-            // Monitor
-            const displayRad = document.getElementById('radValue');
-            displayRad.innerText = maxGroundRadiation.toFixed(2);
-            
-            if(maxGroundRadiation > 9.45) displayRad.style.color = '#990000';
-            else if(maxGroundRadiation > 6.3) displayRad.style.color = '#ff0000';
-            else if(maxGroundRadiation > 4.75) displayRad.style.color = '#ff6600';
-            else if(maxGroundRadiation > 2.7) displayRad.style.color = '#ffcc00';
-            else if(maxGroundRadiation > 1.9) displayRad.style.color = '#00ff00';
-            else displayRad.style.color = '#fff';
-
-            // Ubicación
-            const locX = (flameCenter.x / pixelsPerMeter).toFixed(1);
-            const locZ = (flameCenter.z / pixelsPerMeter).toFixed(1);
-            let txtX = locX >= 0 ? `${Math.abs(locX)}m E` : `${Math.abs(locX)}m O`;
-            let txtZ = locZ >= 0 ? `${Math.abs(locZ)}m S` : `${Math.abs(locZ)}m N`;
-            document.getElementById('radLoc').innerText = `${txtZ}, ${txtX}`;
+            const lx = (flameCenter.x/pixelsPerMeter).toFixed(1);
+            const lz = (flameCenter.z/pixelsPerMeter).toFixed(1);
+            let tx = lx>=0 ? `${Math.abs(lx)}m E` : `${Math.abs(lx)}m O`;
+            let tz = lz>=0 ? `${Math.abs(lz)}m S` : `${Math.abs(lz)}m N`;
+            document.getElementById('radLoc').innerText = `${tz}, ${tx}`;
         }
 
-        // --- Gráficos (Escena 3D) ---
         function drawScene() {
-            // Cielo
-            const gradSky = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            gradSky.addColorStop(0, '#020205'); 
-            gradSky.addColorStop(0.6, '#0a1020'); 
-            gradSky.addColorStop(1, '#1a1510');   
-            ctx.fillStyle = gradSky;
-            ctx.fillRect(0,0, canvas.width, canvas.height);
-
-            // Estrellas
-            ctx.fillStyle = 'white';
-            stars.forEach(star => {
-                ctx.globalAlpha = star.alpha;
-                ctx.beginPath(); ctx.arc(star.x, star.y, star.size, 0, Math.PI*2); ctx.fill();
-            });
-            ctx.globalAlpha = 1.0; 
-
-            // Suelo
-            const gradGround = ctx.createLinearGradient(0, groundY, 0, canvas.height);
-            gradGround.addColorStop(0, '#151005'); 
-            gradGround.addColorStop(1, '#050300'); 
-            ctx.fillStyle = gradGround;
-            ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
-
-            // GRID 3D
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            
-            const gridSize = 2000;
-            const step = 200;
-            const cosA = Math.cos(cameraAngle);
-            const sinA = Math.sin(cameraAngle);
-
-            function project(x, z) {
-                const rotX = x * cosA - z * sinA;
-                const rotZ = x * sinA + z * cosA;
-                const perspective = 600 * cameraZoom;
-                const scale = perspective / (perspective - rotZ);
-                if (scale <= 0) return null;
-                return {
-                    x: centerX + (rotX * scale),
-                    y: groundY + (100 * scale) 
-                };
-            }
-
-            for(let x = -gridSize; x <= gridSize; x += step) {
-                let p1 = project(x, -gridSize);
-                let p2 = project(x, gridSize);
-                if(p1 && p2) { ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); }
-            }
-            for(let z = -gridSize; z <= gridSize; z += step) {
-                let p1 = project(-gridSize, z);
-                let p2 = project(gridSize, z);
-                if(p1 && p2) { ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); }
-            }
+            const gS = ctx.createLinearGradient(0,0,0,canvas.height); gS.addColorStop(0,'#020205'); gS.addColorStop(0.6,'#0a1020'); gS.addColorStop(1,'#1a1510');
+            ctx.fillStyle=gS; ctx.fillRect(0,0,canvas.width,canvas.height);
+            ctx.fillStyle='white'; stars.forEach(s=>{ ctx.globalAlpha=s.alpha; ctx.beginPath(); ctx.arc(s.x,s.y,s.size,0,Math.PI*2); ctx.fill(); }); ctx.globalAlpha=1;
+            const gG = ctx.createLinearGradient(0,groundY,0,canvas.height); gG.addColorStop(0,'#151005'); gG.addColorStop(1,'#050300');
+            ctx.fillStyle=gG; ctx.fillRect(0,groundY,canvas.width,canvas.height-groundY);
+            ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=1; ctx.beginPath();
+            const sz=2000, st=200, ca=Math.cos(cameraAngle), sa=Math.sin(cameraAngle);
+            const proj = (x,z) => { const rx = x*ca - z*sa; const rz = x*sa + z*ca; const p = 600*cameraZoom; const s = p/(p-rz); return s<=0 ? null : {x:centerX+(rx*s), y:groundY+(100*s)}; };
+            for(let x=-sz; x<=sz; x+=st){ let p1=proj(x,-sz), p2=proj(x,sz); if(p1&&p2){ ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); } }
+            for(let z=-sz; z<=sz; z+=st){ let p1=proj(-sz,z), p2=proj(sz,z); if(p1&&p2){ ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); } }
             ctx.stroke();
+            if(maxGroundRadiation>0.1) {
+                const fx=flameCenter.x*4, fz=flameCenter.z*4; const rx=fx*ca-fz*sa, rz=fx*sa+fz*ca; const p=600*cameraZoom, s=p/(p-rz);
+                if(s>0){ const gx=centerX+(rx*s), gr=(50+(maxGroundRadiation*100))*s*cameraZoom; const g=ctx.createRadialGradient(gx,groundY,10*s,gx,groundY,gr); g.addColorStop(0,`rgba(255,100,0,${Math.min(0.6,maxGroundRadiation*0.1)})`); g.addColorStop(1,'rgba(0,0,0,0)'); ctx.fillStyle=g; ctx.save(); ctx.translate(gx,groundY); ctx.scale(1,0.3); ctx.beginPath(); ctx.arc(0,0,gr,0,Math.PI*2); ctx.fill(); ctx.restore(); }
+            }
+            const zh=cameraZoom, ch=(groundY-torchY)*zh, cty=groundY-ch, w=Math.max(15,tipDiameter*20)*zh;
+            ctx.fillStyle='rgba(0,0,0,0.8)'; ctx.beginPath(); ctx.moveTo(centerX-w,groundY); ctx.lineTo(centerX+w,groundY); ctx.lineTo(centerX+w*1.5,groundY+50*zh); ctx.lineTo(centerX-w*1.5,groundY+50*zh); ctx.fill();
+            const bw=w*3; ctx.strokeStyle='#2a2a2a'; ctx.lineWidth=2*zh; ctx.beginPath();
+            ctx.moveTo(centerX-bw/2,groundY); ctx.lineTo(centerX-w/2,cty+20*zh); ctx.moveTo(centerX+bw/2,groundY); ctx.lineTo(centerX+w/2,cty+20*zh);
+            let steps=10, dy=(groundY-cty)/steps;
+            for(let i=0;i<steps;i++){ let y1=groundY-(dy*i), y2=groundY-(dy*(i+1)); let w1=bw/2-((bw/2-w/2)*(i/steps)), w2=bw/2-((bw/2-w/2)*((i+1)/steps)); ctx.moveTo(centerX-w1,y1); ctx.lineTo(centerX+w2,y2); ctx.moveTo(centerX+w1,y1); ctx.lineTo(centerX-w2,y2); ctx.moveTo(centerX-w1,y1); ctx.lineTo(centerX+w1,y1); }
+            ctx.stroke();
+            const gp=ctx.createLinearGradient(centerX-w/2,0,centerX+w/2,0); gp.addColorStop(0,'#111'); gp.addColorStop(0.5,'#666'); gp.addColorStop(1,'#000');
+            ctx.fillStyle=gp; ctx.fillRect(centerX-w/2,cty,w,groundY-cty);
+            ctx.fillStyle='#1a1a1a'; ctx.fillRect(centerX-(w+6*zh)/2,cty,w+6*zh,15*zh);
+            ctx.fillStyle=`rgba(255,50,0,${Math.random()*0.5})`; ctx.fillRect(centerX-(w+4*zh)/2,cty,w+4*zh,2*zh);
+        }
 
-            // Glow Radiación
-            if(maxGroundRadiation > 0.1) {
-                const fX = flameCenter.x * 4; 
-                const fZ = flameCenter.z * 4;
-                const rotFX = fX * cosA - fZ * sinA;
-                const rotFZ = fX * sinA + fZ * cosA;
-                const perspective = 600 * cameraZoom;
-                const scale = perspective / (perspective - rotFZ);
-
-                if(scale > 0) {
-                    const glowX = centerX + (rotFX * scale);
-                    const glowY = groundY; 
-                    const glowRadius = (50 + (maxGroundRadiation * 100)) * scale * cameraZoom;
-                    const glow = ctx.createRadialGradient(glowX, glowY, 10*scale, glowX, glowY, glowRadius);
-                    const intensityAlpha = Math.min(0.6, maxGroundRadiation * 0.1); 
-                    glow.addColorStop(0, `rgba(255, 100, 0, ${intensityAlpha})`); 
-                    glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-                    ctx.fillStyle = glow;
-                    ctx.save();
-                    ctx.translate(glowX, glowY);
-                    ctx.scale(1, 0.3); 
-                    ctx.beginPath(); ctx.arc(0, 0, glowRadius, 0, Math.PI*2); ctx.fill();
-                    ctx.restore();
+        // Radar en Pantalla (Fondo Oscuro)
+        function drawScreenRadar() {
+            const sz=260, r=sz/2, rx=canvas.width-r-30, ry=canvas.height-r-30, ms=0.2;
+            ctx.save(); ctx.translate(rx,ry);
+            ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.fillStyle='rgba(0,10,15,0.95)'; ctx.strokeStyle='#00d2ff'; ctx.lineWidth=2; ctx.fill(); ctx.stroke();
+            ctx.rotate(-cameraAngle);
+            ctx.strokeStyle='#333'; ctx.fillStyle='#555'; ctx.font="9px Arial"; ctx.textAlign="center";
+            [50,100,150].forEach(d=>{ const rp=d*pixelsPerMeter*ms; if(rp<r){ ctx.beginPath(); ctx.arc(0,0,rp,0,Math.PI*2); ctx.stroke(); ctx.save(); ctx.translate(0,-rp+10); ctx.rotate(cameraAngle); ctx.fillText(d+"m",0,0); ctx.restore(); } });
+            ctx.strokeStyle='#444'; ctx.beginPath(); ctx.moveTo(0,-r); ctx.lineTo(0,r); ctx.moveTo(-r,0); ctx.lineTo(r,0); ctx.stroke();
+            ctx.fillStyle='#00d2ff'; ctx.font="bold 11px Arial";
+            const lbl=(t,x,y)=>{ ctx.save(); ctx.translate(x,y); ctx.rotate(cameraAngle); ctx.fillText(t,0,0); ctx.restore(); };
+            lbl("N",0,-r+15); lbl("S",0,r-5); lbl("E",r-10,4); lbl("O",-r+10,4);
+            const cx=flameCenter.x*ms, cy=flameCenter.z*ms;
+            function getR(kw) { if(kw<=0)return 0; return Math.sqrt(qRadiantGlobal/(4*Math.PI*kw))*pixelsPerMeter*ms; }
+            const niveles = [{k:1.9,c:'rgba(0,255,0,0.1)',s:'#0a0'}, {k:2.7,c:'rgba(255,200,0,0.1)',s:'#fa0'}, {k:4.75,c:'rgba(255,100,0,0.2)',s:'#f60'}, {k:6.3,c:'rgba(255,0,0,0.2)',s:'#f00'}, {k:9.45,c:'rgba(150,0,0,0.4)',s:'#900'}];
+            const fxM = flameCenter.x/pixelsPerMeter, fzM = flameCenter.z/pixelsPerMeter;
+            const rcX = cx, rcY = cy; 
+            
+            // LÓGICA CORREGIDA: Solo dibujar si se supera el nivel
+            niveles.forEach(n => { 
+                if(maxGroundRadiation >= n.k) {
+                    const r = getR(n.k); 
+                    if(r>0){ ctx.beginPath(); ctx.arc(rcX, rcY, r, 0, Math.PI*2); ctx.fillStyle=n.c; ctx.fill(); ctx.strokeStyle=n.s; ctx.stroke(); } 
                 }
-            }
+            });
 
-            // Antorcha y Estructura (Zoom aplicado)
-            const zoomH = cameraZoom;
-            const currentH = (groundY - torchY) * zoomH;
-            const currentTorchY = groundY - currentH;
-
-            const w = Math.max(15, tipDiameter * 20) * zoomH; 
-            
-            // Sombra
-            ctx.fillStyle = 'rgba(0,0,0,0.8)';
-            ctx.beginPath();
-            ctx.moveTo(centerX - w, groundY); ctx.lineTo(centerX + w, groundY);
-            ctx.lineTo(centerX + w*1.5, groundY + 50*zoomH);
-            ctx.lineTo(centerX - w*1.5, groundY + 50*zoomH);
-            ctx.fill();
-
-            // Derrick
-            const baseW = w * 3; 
-            ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 2 * zoomH;
-            ctx.beginPath();
-            ctx.moveTo(centerX - baseW/2, groundY); ctx.lineTo(centerX - w/2, currentTorchY + 20*zoomH);
-            ctx.moveTo(centerX + baseW/2, groundY); ctx.lineTo(centerX + w/2, currentTorchY + 20*zoomH);
-            let steps = 10;
-            let dy = (groundY - currentTorchY) / steps;
-            for(let i=0; i<steps; i++) {
-                let y1 = groundY - (dy * i);
-                let y2 = groundY - (dy * (i+1));
-                let w1 = baseW/2 - ((baseW/2 - w/2) * (i/steps));
-                let w2 = baseW/2 - ((baseW/2 - w/2) * ((i+1)/steps));
-                ctx.moveTo(centerX - w1, y1); ctx.lineTo(centerX + w2, y2);
-                ctx.moveTo(centerX + w1, y1); ctx.lineTo(centerX - w2, y2);
-                ctx.moveTo(centerX - w1, y1); ctx.lineTo(centerX + w1, y1);
-            }
-            ctx.stroke();
-
-            // Stack 3D
-            const gradPipe = ctx.createLinearGradient(centerX - w/2, 0, centerX + w/2, 0);
-            gradPipe.addColorStop(0, '#111');   
-            gradPipe.addColorStop(0.2, '#333'); 
-            gradPipe.addColorStop(0.5, '#666'); 
-            gradPipe.addColorStop(0.8, '#333'); 
-            gradPipe.addColorStop(1, '#000');   
-            ctx.fillStyle = gradPipe;
-            ctx.fillRect(centerX - w/2, currentTorchY, w, groundY - currentTorchY);
-
-            // Tip
-            ctx.fillStyle = '#1a1a1a'; 
-            ctx.fillRect(centerX - (w+6*zoomH)/2, currentTorchY, w+6*zoomH, 15*zoomH);
-            ctx.fillStyle = `rgba(255, 50, 0, ${Math.random()*0.5})`;
-            ctx.fillRect(centerX - (w+4*zoomH)/2, currentTorchY, w+4*zoomH, 2*zoomH);
+            if(maxGroundRadiation>0.1){ ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(rcX-5,rcY-5); ctx.lineTo(rcX+5,rcY+5); ctx.moveTo(rcX+5,rcY-5); ctx.lineTo(rcX-5,rcY+5); ctx.stroke(); }
+            ctx.fillStyle='#00d2ff'; ctx.fillRect(-3,-3,6,6); ctx.restore();
         }
 
         function drawWindVane3D() {
-            const size = 60;
-            const x = canvas.width - 80;
-            const y = 80;
-            
-            ctx.save();
-            ctx.translate(x, y);
-            
-            ctx.fillStyle = '#888';
-            ctx.font = "10px Arial";
-            ctx.textAlign = "center";
-            ctx.fillText("VIENTO", 0, -size/2 - 10);
-            ctx.strokeStyle = '#444';
-            ctx.beginPath(); ctx.arc(0,0, size/2, 0, Math.PI*2); ctx.stroke();
-            ctx.fillStyle = '#666'; ctx.fillText("N", 0, -size/2 + 10);
-
-            const rad = (windAngleDeg * (Math.PI / 180)) - cameraAngle; 
-            
-            ctx.rotate(rad);
-
-            ctx.beginPath();
-            ctx.moveTo(0, -size/2 + 5); ctx.lineTo(10, 5); ctx.lineTo(5, 5);           
-            ctx.lineTo(5, size/3); ctx.lineTo(-5, size/3); ctx.lineTo(-5, 5); ctx.lineTo(-10, 5);         
-            ctx.closePath();
-            ctx.fillStyle = '#00d2ff';
-            ctx.fill();
-            ctx.restore();
-        }
-
-        function drawRadar() {
-            const size = 260; 
-            const radius = size / 2;
-            const radarX = canvas.width - radius - 30;
-            const radarY = canvas.height - radius - 30;
-            const mapScale = 0.2; 
-            
-            ctx.save();
-            ctx.translate(radarX, radarY);
-
-            // Fondo
-            ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(0, 10, 15, 0.95)';
-            ctx.strokeStyle = '#00d2ff'; ctx.lineWidth = 2;
-            ctx.fill(); ctx.stroke();
-
-            ctx.rotate(-cameraAngle);
-
-            // Grilla
-            ctx.strokeStyle = '#333'; ctx.fillStyle = '#555';
-            ctx.font = "9px Arial"; ctx.textAlign = "center";
-            const distances = [50, 100, 150]; 
-            distances.forEach(d => {
-                const rPx = d * pixelsPerMeter * mapScale;
-                if(rPx < radius) {
-                    ctx.beginPath(); ctx.arc(0, 0, rPx, 0, Math.PI * 2);
-                    ctx.stroke(); 
-                    ctx.save();
-                    ctx.translate(0, -rPx + 10);
-                    ctx.rotate(cameraAngle); 
-                    ctx.fillText(d + "m", 0, 0);
-                    ctx.restore();
-                }
-            });
-
-            // Ejes
-            ctx.strokeStyle = '#444'; ctx.beginPath(); 
-            ctx.moveTo(0, -radius); ctx.lineTo(0, radius); 
-            ctx.moveTo(-radius, 0); ctx.lineTo(radius, 0); ctx.stroke();
-            
-            ctx.fillStyle = '#00d2ff'; ctx.font = "bold 11px Arial";
-            function drawLabel(text, x, y) {
-                ctx.save();
-                ctx.translate(x, y);
-                ctx.rotate(cameraAngle);
-                ctx.fillText(text, 0, 0);
-                ctx.restore();
-            }
-            drawLabel("N", 0, -radius + 15);
-            drawLabel("S", 0, radius - 5);
-            drawLabel("E", radius - 10, 4);
-            drawLabel("O", -radius + 10, 4);
-
-            // --- ZONAS DE RIESGO ---
-            const cx = flameCenter.x * mapScale;
-            const cy = flameCenter.z * mapScale;
-            
-            function getRadiusForIntensity(kwTarget) {
-                if(kwTarget <= 0) return 0;
-                const rSphere = Math.sqrt(qRadiantGlobal / (4 * Math.PI * kwTarget));
-                return rSphere * pixelsPerMeter * mapScale;
-            }
-
-            const r9_45 = getRadiusForIntensity(9.45);
-            const r6_3 = getRadiusForIntensity(6.3);
-            const r4_75 = getRadiusForIntensity(4.75);
-            const r2_7 = getRadiusForIntensity(2.7);
-            const r1_9 = getRadiusForIntensity(1.9);
-
-            if(maxGroundRadiation > 1.9) {
-                ctx.beginPath(); ctx.arc(cx, cy, r1_9, 0, Math.PI*2);
-                ctx.strokeStyle = '#00ff00'; ctx.lineWidth=1; ctx.stroke(); 
-            }
-            if(maxGroundRadiation > 2.7) {
-                ctx.beginPath(); ctx.arc(cx, cy, r2_7, 0, Math.PI*2);
-                ctx.strokeStyle = '#ffcc00'; ctx.lineWidth=1; ctx.stroke(); 
-            }
-            if(maxGroundRadiation > 4.75) {
-                ctx.beginPath(); ctx.arc(cx, cy, r4_75, 0, Math.PI*2);
-                ctx.strokeStyle = '#ff6600'; ctx.lineWidth=1; ctx.stroke(); 
-            }
-            if(maxGroundRadiation > 6.3) {
-                ctx.beginPath(); ctx.arc(cx, cy, r6_3, 0, Math.PI*2);
-                ctx.fillStyle = 'rgba(255, 0, 0, 0.2)'; ctx.fill();
-                ctx.strokeStyle = '#ff0000'; ctx.lineWidth=1.5; ctx.stroke(); 
-            }
-            if(maxGroundRadiation > 9.45) {
-                ctx.beginPath(); ctx.arc(cx, cy, r9_45, 0, Math.PI*2);
-                ctx.fillStyle = 'rgba(150, 0, 0, 0.4)'; ctx.fill();
-                ctx.strokeStyle = '#990000'; ctx.lineWidth=2; ctx.stroke(); 
-            }
-
-            if(maxGroundRadiation > 0.1) {
-                ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
-                ctx.beginPath(); 
-                ctx.moveTo(cx-5, cy-5); ctx.lineTo(cx+5, cy+5);
-                ctx.moveTo(cx+5, cy-5); ctx.lineTo(cx-5, cy+5);
-                ctx.stroke();
-            }
-
-            ctx.fillStyle = '#00d2ff'; ctx.fillRect(-3, -3, 6, 6);
-            ctx.restore();
+            const sz=60, x=canvas.width-80, y=80;
+            ctx.save(); ctx.translate(x,y);
+            ctx.fillStyle='#888'; ctx.font="10px Arial"; ctx.textAlign="center"; ctx.fillText("VIENTO",0,-sz/2-10);
+            ctx.strokeStyle='#444'; ctx.beginPath(); ctx.arc(0,0,sz/2,0,Math.PI*2); ctx.stroke();
+            ctx.fillStyle='#666'; ctx.fillText("N",0,-sz/2+10);
+            ctx.rotate((windAngleDeg*(Math.PI/180))-cameraAngle);
+            ctx.beginPath(); ctx.moveTo(0,-sz/2+5); ctx.lineTo(10,5); ctx.lineTo(5,5); ctx.lineTo(5,sz/3); ctx.lineTo(-5,sz/3); ctx.lineTo(-5,5); ctx.lineTo(-10,5); ctx.closePath();
+            ctx.fillStyle='#00d2ff'; ctx.fill(); ctx.restore();
         }
 
         function animate() {
-            calculatePhysics();
-            drawScene();
+            calculatePhysics(); drawScene();
             drawWindVane3D();
-            
-            ctx.globalCompositeOperation = 'source-over';
-            drawRadar();
-            
-            ctx.globalCompositeOperation = 'lighter';
-            particles.sort((a, b) => a.z - b.z);
-            const spawnCount = Math.floor(gasFlow / 5);
-            for(let i=0; i<spawnCount; i++) particles.push(new Particle());
-
-            for (let i = 0; i < particles.length; i++) {
-                particles[i].update();
-                particles[i].draw();
-                if (particles[i].life <= 0) {
-                    particles.splice(i, 1);
-                    i--;
-                }
-            }
-            
-            ctx.globalCompositeOperation = 'source-over';
-
+            ctx.globalCompositeOperation='source-over'; drawScreenRadar();
+            ctx.globalCompositeOperation='lighter';
+            particles.sort((a,b)=>a.z-b.z);
+            const sp = Math.floor(gasFlow/5); for(let i=0;i<sp;i++) particles.push(new Particle());
+            for(let i=0;i<particles.length;i++){ particles[i].update(); particles[i].draw(); if(particles[i].life<=0){ particles.splice(i,1); i--; } }
+            ctx.globalCompositeOperation='source-over';
             requestAnimationFrame(animate);
         }
 
-        window.addEventListener('resize', () => {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            groundY = canvas.height - 50;
-            stars.length = 0;
-            for(let i=0; i<100; i++) {
-                stars.push({
-                    x: Math.random() * window.innerWidth,
-                    y: Math.random() * window.innerHeight * 0.6,
-                    size: Math.random() * 2,
-                    alpha: Math.random()
-                });
-            }
-        });
-
+        window.addEventListener('resize', ()=>{ canvas.width=window.innerWidth; canvas.height=window.innerHeight; groundY=canvas.height-50; stars.length=0; for(let i=0;i<100;i++) stars.push({x:Math.random()*window.innerWidth, y:Math.random()*window.innerHeight*0.6, size:Math.random()*2, alpha:Math.random()}); });
         animate();
-
     </script>
 </body>
 </html>
-
-</html>
-
